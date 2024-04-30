@@ -1,11 +1,10 @@
 mod core;
-use crate::core::board as Board;
 
 fn main() {
     println!("Hello, world!");
 
-    let board = Board::new();
-    println!(
-        "{}",board.toStr()
-    );
+    let board = core::Board::new();
+    let s = String::new();
+    println!("{}", board.toStr(s));
+    println!("{}",board.piece_exists_at(0,0));
 }
