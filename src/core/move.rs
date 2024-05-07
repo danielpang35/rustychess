@@ -57,25 +57,40 @@ impl Move {
     pub fn new() -> Self {
         Self { data: 0, }
     }
+    
     pub fn movemasktoBitMoves(src: u8, movemask: &mut u64)-> Vec<Move>
       {
         let mut vec = Vec::new();
         while *movemask != 0 {
           let dst = constlib::poplsb(movemask) as u8;
-          let mut bitm = Move::new();
-          println!("making bitmove: {} {}", src,dst);
-          bitm.make(src,dst, 0);
+          let bitm = Move::make(src,dst, 0);
           vec.push(bitm);
         }
         return vec;
       }
 
-    pub fn make(&mut self, src: u8, dst:u8, flag:u16,)
-    //assumes
+    pub fn make(src: u8, dst:u8, flag:u16) -> Move
     //make a bitmove given src, destination and flag
-      {
-        self.data = (src as u16) | ((dst as u16) << 6) | (flag << 12);
+    {  Move {
+        data: (src as u16) | ((dst as u16) << 6) | (flag << 12)
       }
+    }
+    pub fn makeQuiet(src:u8, dst:u8) -> Move{
+      Move::make(src, dst, 0)
+    }
+    pub fn makeDBPawnPush(src:u8, dst:u8) -> Move{
+      Move::make(src, dst, Move::FLAG_DOUBLE_PAWN)
+    }
+    pub fn makeCapture(src:u8,dst:u8) -> Move {
+      println!("making bitmove: {} {}", src,dst);
+      Move::make(src,dst, Move::FLAG_CAPTURE)
+    }
+    pub fn makePromCap(src:u8, dst:u8) -> Move {
+      Move::make(src, dst,Move::FLAG_PROMO_CAP_Q)
+    }
+    pub fn makeProm(src:u8, dst:u8) -> Move {
+      Move::make(src, dst,Move::FLAG_PROMO_Q)
+    }
     pub fn flag(self) -> u16 {
       //return flag bits of self
       return (self.data & FLAG_MASK) >> 12
