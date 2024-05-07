@@ -15,6 +15,11 @@ pub enum PieceIndex {
   q,
   k,
 }
+impl PieceIndex {
+  pub fn index(self)->usize {
+    unsafe {self as usize}
+  }
+}
 
 pub struct MoveGenerator {
     //precomputed attack bitboard for each square of the board
@@ -49,7 +54,7 @@ impl MoveGenerator {
       {
         let mut moves = Vec::new();
         self.generatepawnmoves(board,&mut moves);
-        // self.generateknightmoves(board,&mut moves);
+        self.generateknightmoves(board,&mut moves);
         // self.generatebishopmoves(board,&mut moves);
         // self.generaterookmoves(board,&mut moves);
         // self.generatequeenmoves(board,&mut moves);
@@ -63,7 +68,7 @@ impl MoveGenerator {
       let color = board.turn;
       let mut bitmove = 0;
       if color == 0 {
-        let mut pbb = board.pieces[0];
+        let mut pbb = board.pieces[PieceIndex::P.index()];
         while pbb != 0 {
           let ind = pbb.trailing_zeros();
           //get pawn moves and attacks at square
@@ -84,7 +89,7 @@ impl MoveGenerator {
         }
       } else {
         //generate black pawn movemask
-        let mut pbb = board.pieces[6];
+        let mut pbb = board.pieces[PieceIndex::p.index()];
         while pbb != 0 {
           let ind = pbb.trailing_zeros();
           //do something with ind
@@ -94,19 +99,18 @@ impl MoveGenerator {
           movemask |= (attacks & board.playerpieces[0]) | (moves & !(board.occupied));
           let mut moves = Move::movemasktoBitMoves(ind as u8, &mut movemask);
           movelist.append(&mut moves);
-
           //check if attacks intersect with enemy pieces
           pbb = pbb & (pbb - 1);
         }
       }
-      
+      if(board.ep_square != 0)
+      {
+          //ep is possible
+          
+      }
       
     }
-    
-    pub fn generateOne(self, board: &Board)
-      {
-        
-      }
+
     pub fn init_pawnmoves(&mut self) {
       for i in 8..56 {
         let mut wmoves = 0;

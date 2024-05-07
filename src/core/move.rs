@@ -5,6 +5,7 @@
 //! the next two bits are a special move flag: promotion (1), en passant (2), castling (3)
 use crate::core::piece::PieceType;
 use crate::core::constlib;
+
 //CODES:
 // 0000  ===> Quiet move
 // 0001  ===> Double Pawn Push
@@ -30,6 +31,7 @@ const PR_MASK: u16 = 0b1000_000000_000000; //encodes a promotion
 const CP_MASK: u16 = 0b0100_000000_000000; //encodes a capture
 const FLAG_MASK: u16 = 0b1111_000000_000000;
 const SP_MASK: u16 = 0b0011_000000_000000; //encodes which piece to promote to. If not promotion, then this encodes castling or ep
+
 #[derive(Copy, Clone)]
 pub struct Move {
     data: u16,
@@ -61,14 +63,18 @@ impl Move {
         while *movemask != 0 {
           let dst = constlib::poplsb(movemask) as u8;
           let mut bitm = Move::new();
+          println!("making bitmove: {} {}", src,dst);
           bitm.make(src,dst, 0);
           vec.push(bitm);
         }
         return vec;
       }
+
     pub fn make(&mut self, src: u8, dst:u8, flag:u16,)
+    //assumes
+    //make a bitmove given src, destination and flag
       {
-        self.data = (src as u16) | (dst as u16) | (flag << 12);
+        self.data = (src as u16) | ((dst as u16) << 6) | (flag << 12);
       }
     pub fn flag(self) -> u16 {
       //return flag bits of self

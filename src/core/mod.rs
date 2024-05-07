@@ -38,6 +38,7 @@ impl Board {
         return if result & 1 == 1 { true } else { false };
     }
 
+    //creates board from fen string
     pub fn from_fen(&mut self, fen: String) {
         let mut fields = fen.split(" ");
         let pieces = fields.next().unwrap().chars();
@@ -94,6 +95,8 @@ impl Board {
         self.ep_square = ep_sq;
     }
 
+    //updates the board state by placing a piece at a location
+    //helper function to create board from fen
     pub fn put_piece(&mut self, ch: char, rank: usize, file: usize) {
         let ind = rank * 8 + file;
         let color = if ch.is_uppercase() { 0 } else { 1 };
