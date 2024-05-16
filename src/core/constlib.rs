@@ -82,3 +82,12 @@ pub fn print_bitboard(bitboard: u64) {
   println!("----------------------------\n");
 
 }
+
+pub fn squaretouci(square: u8) -> String {
+  if square >= 64 {
+      panic!("Square number must be between 0 and 63");
+  }
+  let file = (square % 8) + b'a';
+  let rank = (square / 8) + 1 + b'0';
+  format!("{}{}", file as char, rank as char)
+}

@@ -123,8 +123,6 @@ impl Board {
     //returns string of board
     pub fn toStr(&self, mut input: String) -> String {
         let mut s = String::from("+---+---+---+---+---+---+---+---+");
-        let mg = movegen::MoveGenerator::new();
-        let vec = mg.generate(self);
         for r in (0..=7).rev() {
             let mut row = String::from("\n|");
             for f in 0..=7 {

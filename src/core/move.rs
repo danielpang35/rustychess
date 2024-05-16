@@ -57,7 +57,11 @@ impl Move {
     pub fn new() -> Self {
         Self { data: 0, }
     }
-    
+    pub fn print(self) {
+      let src = constlib::squaretouci(self.getSrc());
+      let dst = constlib::squaretouci(self.getDst());
+      println!("Move:\n{}{}",src, dst)
+    }
     pub fn movemasktoBitMoves(src: u8, movemask: &mut u64)-> Vec<Move>
       {
         let mut vec = Vec::new();
@@ -71,7 +75,8 @@ impl Move {
 
     pub fn make(src: u8, dst:u8, flag:u16) -> Move
     //make a bitmove given src, destination and flag
-    {  Move {
+    { 
+      Move {
         data: (src as u16) | ((dst as u16) << 6) | (flag << 12)
       }
     }
@@ -82,7 +87,6 @@ impl Move {
       Move::make(src, dst, Move::FLAG_DOUBLE_PAWN)
     }
     pub fn makeCapture(src:u8,dst:u8) -> Move {
-      println!("making bitmove: {} {}", src,dst);
       Move::make(src,dst, Move::FLAG_CAPTURE)
     }
     pub fn makePromCap(src:u8, dst:u8) -> Move {
@@ -90,6 +94,9 @@ impl Move {
     }
     pub fn makeProm(src:u8, dst:u8) -> Move {
       Move::make(src, dst,Move::FLAG_PROMO_Q)
+    }
+    pub fn makeEP(src:u8, dst:u8) -> Move {
+      Move::make(src,dst,Move::FLAG_EP)
     }
     pub fn flag(self) -> u16 {
       //return flag bits of self

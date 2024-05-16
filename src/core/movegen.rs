@@ -60,13 +60,15 @@ impl MoveGenerator {
         // self.generatequeenmoves(board,&mut moves);
         moves
       }
-    
+    pub fn generatepawnmovesColor(self, board, movelist: &mut Vec<Move>)
     pub fn generatepawnmoves(self,board: &Board, movelist: &mut Vec<Move>) {
       //looks up pawn attacks and moves, finds out if they're possible
       //creates a bitmove for each possible move
       //mutates given array
       let color = board.turn;
-      let mut bitmove = 0;
+      let mut pbb = if color == 0 {board.pieces[PieceIndex::P.index()]} else {board.pieces[PieceIndex::p.index()]};
+
+      println!("making pawn moves for {}",if color == 0 {"WHITE"} else {"BLACK"});
       if color == 0 {
         let mut pbb = board.pieces[PieceIndex::P.index()];
         while pbb != 0 {
@@ -81,7 +83,76 @@ impl MoveGenerator {
           {
             //loops through pawnpushes
             let dst = constlib::poplsb(&mut moves) as u8;
-            if(dst /8 == 7)
+            if(dst /8 == 7 | dst /8 == 0)
+            {
+              //this is a promotion
+              movelist.push(Move::makeProm(ind as u8, dst))
+            } else {
+              //this is a quiet pawnpush
+              movelist.push(Move::makeQuiet(ind as u8, dst))
+            }
+          }
+          
+          
+
+          //move one up if board spot is not occupied^
+          //TODO: refactor this to make double pawn pushes another north shift of moves
+          // this way, ep square can be set now
+          //for each legal one move pawn push, check if can push another.
+          let shift = if color == 0 {constlib::north} else {constlib::south};
+          let rankmask = if color == 0 {constlib::rankmasks[2]} else {constlib::rankmasks[5]};
+          let mut push_two_moves = constlib::genShift(shift, (one_push&rankmask));
+          push_two_moves &= !board.occupied;
+          //now create a vec of double pawn pushes:
+          while(push_two_moves != 0)
+          {
+            let dst = constlib::poplsb(&mut push_two_moves) as u8;
+            let doublepushbitm = Move::makeDBPawnPush(ind as u8, dst);
+            movelist.push(doublepushbitm);
+          }
+          let mut attacks = self.pawnattacks[color as usize][ind as usize];
+          //generate legal moves
+          //attacks are legal if enemy occupies square
+          //playerpieces is list of piece positions by color
+          let enemypieces = if color == 0 {board.playerpieces[1]} else {board.playerpieces[0]}
+          attacks &= enemypieces;
+          if(board.ep_square != 0)
+          {
+            movelist.push(Move::makeEP(ind as u8, board.ep_square));
+          }
+          while(attacks != 0)
+          {
+            let dst = constlib::poplsb(&mut attacks) as u8;
+            if(dst / 8 == 7 | dst / 8 == 0)
+            {
+              movelist.push(Move::makePromCap(ind as u8, dst))
+            } else {movelist.push(Move::makeCapture(ind as u8, dst))
+            }
+
+          }
+          //create capture bitmoves
+          //set last bit of pawn bb to 0
+          pbb = pbb & (pbb-1);
+          //save legalmoves for this square
+        }
+      } else {
+        //create black pawn moves
+        println!("{}HERE",unsafe{PieceType::P as u8});
+        let mut pbb = board.pieces[PieceIndex::p.index()];
+        while pbb != 0 {
+          let ind = pbb.trailing_zeros();
+          println!("Making move from {}",constlib::squaretouci(ind as u8));
+          //get pawn moves and attacks at square
+          
+          //moves are legal if square is not occupied
+          let mut moves = self.pawnmoves[color as usize][ind as usize];
+          moves &= !board.occupied;
+          let one_push = moves;
+          while(moves != 0)
+          {
+            //loops through pawnpushes
+            let dst = constlib::poplsb(&mut moves) as u8;
+            if(dst /8 == 0)
             {
               //this is a promotion
               movelist.push(Move::makeProm(ind as u8, dst))
@@ -98,11 +169,9 @@ impl MoveGenerator {
           // this way, ep square can be set now
           //for each legal one move pawn push, check if can push another.
           
-          let mut push_two_moves = ((one_push&constlib::rankmasks[2])<< constlib::north );
+          let mut push_two_moves = constlib::genShift(constlib::south, (one_push&constlib::rankmasks[6]));
           push_two_moves &= !board.occupied;
           //now create a vec of double pawn pushes:
-          println!("double pawn push:");
-          constlib::print_bitboard(push_two_moves);
           while(push_two_moves != 0)
           {
             let dst = constlib::poplsb(&mut push_two_moves) as u8;
@@ -114,46 +183,31 @@ impl MoveGenerator {
           //attacks are legal if enemy occupies square
           //playerpieces is list of piece positions by color
           
-          attacks &= board.playerpieces[1];
-          if(board.ep_square != 0)
-          {
-            attacks |= 1 << board.ep_square;
-          }
+          attacks &= board.playerpieces[0];
+          
           while(attacks != 0)
           {
             let dst = constlib::poplsb(&mut attacks) as u8;
-            if(dst / 8 == 7)
+            if(dst / 8 == 0)
             {
               movelist.push(Move::makePromCap(ind as u8, dst))
-            } else {movelist.push(Move::makeCapture(ind as u8, dst))
-            }
+            } else {movelist.push(Move::makeCapture(ind as u8, dst))}
 
+          }
+          //CAUTION: currently, ep_square is checked for every index. every square can epx
+          //if a pawn is on the 4th rank, then it could potentially ep
+          if(self.pawnattacks[color as usize][ind as usize] & (1<<board.ep_square) != 0)
+          {
+            movelist.push(Move::makeEP(ind as u8, board.ep_square));
+            println!("ep:");
+            constlib::print_bitboard((1 << board.ep_square)as u64);
           }
           //create capture bitmoves
           //set last bit of pawn bb to 0
           pbb = pbb & (pbb-1);
-          //save legalmoves for this square
-        }
-      } else {
-        //generate black pawn movemask
-        let mut pbb = board.pieces[PieceIndex::p.index()];
-        while pbb != 0 {
-          let ind = pbb.trailing_zeros();
-          //do something with ind
-          let moves = self.pawnmoves[color as usize][ind as usize];
-          
-          //constlib::print_bitboard(push_two);
-
-          let attacks = self.pawnmoves[color as usize][ind as usize];
-          let mut movemask = 0;
-          movemask |= (attacks & board.playerpieces[0]) | (moves & !(board.occupied));
-          let mut moves = Move::movemasktoBitMoves(ind as u8, &mut movemask);
-          movelist.append(&mut moves);
-          //check if attacks intersect with enemy pieces
-          pbb = pbb & (pbb - 1);
         }
       }
-
+      
       
     }
 
@@ -168,8 +222,6 @@ impl MoveGenerator {
         
         self.pawnmoves[0][i] = wmoves;
         self.pawnmoves[1][i] = bmoves;
-        
-
 
       }
     }
