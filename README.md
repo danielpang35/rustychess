@@ -16,3 +16,8 @@ TODO:
   - design ui using some framework (TBD)
   - implement magic bitboards
   - create a 1500 elo bot using the engine.
+
+Based on Stockfish, Pleco, and chess programming wiki.
+https://github.com/official-stockfish/Stockfish
+https://github.com/pleco-rs/Pleco
+https://www.chessprogramming.org/Main_Page
