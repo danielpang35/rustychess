@@ -1,6 +1,7 @@
+#[allow(dead_code)]
+#[allow(nonstandard_style)]
 mod core;
 use std::env;
-#[allow(dead_code)]
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -10,7 +11,7 @@ fn main() {
     let s = String::new();
     //board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
     //
-    board.from_fen(String::from("rnbqkbnr/pppp1ppp/8/8/3PpP2/N7/PPP1P1PP/R1BQKBNR b KQkq f3 0 3"));
+    board.from_fen(String::from("rnbqkbnr/ppp2ppp/4p3/3N4/8/8/PPPPPPPP/R1BQKBN1 w KQkq - 0 1    "));
     let mg = core::movegen::MoveGenerator::new();
     let ml = mg.generate(&board);
     for bm in ml {

@@ -21,7 +21,7 @@ pub const fn initRankMaskLookup() -> [u64; 8] {
     let rank1 = 0xFF;
     let mut arr = [0; 8];
     let mut i = 0;
-    while (i < 8) {
+    while i < 8 {
         arr[i] = rank1 << (8 * i);
         i += 1;
     }
@@ -64,7 +64,7 @@ pub fn poplsb(bitboard: &mut u64) -> u8
     //returns number of zeros to lsb
     //sets lsb to 0
     let zeros = bitboard.trailing_zeros();
-    *bitboard &= (*bitboard - 1);
+    *bitboard &= *bitboard - 1;
     zeros as u8
   }
 

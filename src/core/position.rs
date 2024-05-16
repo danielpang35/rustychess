@@ -22,7 +22,6 @@ impl Position {
   
     pub fn parseFen(&mut self, fen: String) {
       let mut rank: usize = 8; let mut file: usize = 0;
-      let mut index = 0;
       
       for c in fen.chars() {
         if c.is_numeric()
