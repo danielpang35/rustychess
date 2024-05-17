@@ -27,9 +27,8 @@ pub struct MoveGenerator {
     pub knight: [u64; 64],
     pub pawnattacks: [[u64; 64];2], //array of length two of array of 64 bitboards
     pub pawnmoves: [[u64; 64];2], 
-
-    bishop: [u64; 64],
-    rook: [u64; 64],
+    pub bishop: [u64; 64],
+    pub rook: [u64; 64],
 }
 
 impl MoveGenerator {
@@ -55,21 +54,91 @@ impl MoveGenerator {
         let mut moves = Vec::new();
         self.generatepawnmoves(board,&mut moves);
         self.generateknightmoves(board,&mut moves);
-        // self.generatebishopmoves(board,&mut moves);
-        // self.generaterookmoves(board,&mut moves);
-        // self.generatequeenmoves(board,&mut moves);
+        self.generatebishopmoves(board,&mut moves);
+        self.generaterookmoves(board,&mut moves);
+        self.generatequeenmoves(board,&mut moves);
+        self.generatekingmoves(board,&mut moves);
         moves
       }
+    
+    pub fn generatekingmoves(&self,board:&Board,movelist:&mut Vec<Move>) {
+      let color = board.turn;
+      let mut kbb = if (color == 0) {board.pieces[PieceIndex::K.index()]} else {board.pieces[PieceIndex::k.index()]};
+      let them = if color == 0 {1} else {0};
+      while kbb != 0 {
+        let ind = constlib::poplsb(&mut kbb);
+        let mut attacks = self.king[ind as usize];
+        //returned attacks allow friendly pieces to be captured.
+        attacks &= !board.playerpieces[color as usize];
+        constlib::print_bitboard(attacks);
+        println!("attacks for square {}",constlib::squaretouci(ind));
+        while(attacks != 0){
+          let dst = constlib::poplsb(&mut attacks);
+          if (1 << dst) & board.playerpieces[them as usize] != 0 {
+            movelist.push(Move::makeCapture(ind,dst));
+          } else {movelist.push(Move::makeQuiet(ind,dst));}
+        }
+      }
+    }
+    pub fn generatequeenmoves(&self, board:&Board, movelist:&mut Vec<Move>) {
+      let color = board.turn;
+      let mut qbb = if (color == 0) {board.pieces[PieceIndex::Q.index()]} else {board.pieces[PieceIndex::q.index()]};
+      let them = if color == 0 {1} else {0};
+      while qbb != 0 {
+        let ind = constlib::poplsb(&mut qbb);
+        let mut attacks = self.compute_rook(ind as i8,board.occupied) | self.compute_bishop(ind as i8, board.occupied);
+        //returned attacks allow friendly pieces to be captured.
+        attacks &= !board.playerpieces[color as usize];
+        while(attacks != 0){
+          let dst = constlib::poplsb(&mut attacks);
+          if (1 << dst) & board.playerpieces[them as usize] != 0 {
+            movelist.push(Move::makeCapture(ind,dst));
+          } else {movelist.push(Move::makeQuiet(ind,dst));}
+        }
+      }
+    }
+    pub fn generaterookmoves(&self, board:&Board, movelist:&mut Vec<Move>) {
+      let color = board.turn;
+      let mut rbb = if (color == 0) {board.pieces[PieceIndex::R.index()]} else {board.pieces[PieceIndex::r.index()]};
+      let them = if color == 0 {1} else {0};
+      while rbb != 0 {
+        let ind = constlib::poplsb(&mut rbb);
+        let mut attacks = self.compute_rook(ind as i8,board.occupied);
+        //returned attacks allow friendly pieces to be captured.
+        attacks &= !board.playerpieces[color as usize];
+        while(attacks != 0){
+          let dst = constlib::poplsb(&mut attacks);
+          if (1 << dst) & board.playerpieces[them] != 0 {
+            movelist.push(Move::makeCapture(ind,dst));
+          } else {movelist.push(Move::makeQuiet(ind,dst));}
+        }
+      }
+    }
+    pub fn generatebishopmoves(&self, board:&Board, movelist:&mut Vec<Move>) {
+      let color = board.turn;
+      let mut bbb = if (color == 0) {board.pieces[PieceIndex::B.index()]} else {board.pieces[PieceIndex::b.index()]};
+      let them = if color == 0 {1} else {0};
+      while bbb != 0 {
+        let ind = constlib::poplsb(&mut bbb);
+        let mut attacks = self.compute_bishop(ind as i8,board.occupied);
+        //returned attacks allow friendly pieces to be captured.
+        attacks &= !board.playerpieces[color as usize];
+        while(attacks != 0){
+          let dst = constlib::poplsb(&mut attacks);
+          if (1 << dst) & board.playerpieces[them as usize] != 0 {
+            movelist.push(Move::makeCapture(ind,dst));
+          } else {movelist.push(Move::makeQuiet(ind,dst));}
+        }
+      }
+    }
     pub fn generateknightmoves(&self,board: &Board, movelist: &mut Vec<Move>) {
       let color = board.turn;
-      println!("making knight moves for {}",if color == 0 {"WHITE"} else {"BLACK"});
       let enemy = if color == 0 {1} else {0};
       let mut kbb = if color == 0 {board.pieces[PieceIndex::N.index()]} else {board.pieces[PieceIndex::n.index()]};
       while kbb != 0 {
         let ind = constlib::poplsb(&mut kbb);
         let mut attacks = self.knight[ind as usize];
         attacks &= !board.playerpieces[color as usize];
-        constlib::print_bitboard(attacks);
         while(attacks != 0){
           let dst = constlib::poplsb(&mut attacks);
           if (1 << dst) & board.playerpieces[enemy as usize] != 0 {
@@ -77,6 +146,7 @@ impl MoveGenerator {
           } else {movelist.push(Move::makeQuiet(ind,dst));}
         }
       }
+      
     }
     pub fn generatepawnmoves(&self,board: &Board, movelist: &mut Vec<Move>) {
       //looks up pawn attacks and moves, finds out if they're possible
@@ -198,7 +268,6 @@ impl MoveGenerator {
               attacks &= constlib::notHFile;
             }
             self.king[i] = attacks;}
-      
     }
     pub fn init_knight(&mut self)
       {
@@ -227,30 +296,134 @@ impl MoveGenerator {
           self.knight[i] = attacks;
         }
       }
-
-  
-    pub fn generate_sliding_attack_bitmask(&self, piece: PieceType, square: u64) -> u64 {
-      if piece == PieceType::R
-      {
-        return Self::generate_rook_attack(square)
-      } else if piece == PieceType::B{
-        return Self::generate_bishop_attack(square)
-      } else {
-        return (Self::generate_rook_attack(square) | Self::generate_bishop_attack(square))
-      }
+    pub fn compute_bishop(&self,sq:i8,blockers:u64) -> u64{
+      //index 0-3->diagonals
+      //index 4-7->orthogonals
       
+      let mut attacks = 0;
+      //current square
+      let mut currpos: i8;
+      for diag in 0..4{
+        //start pos
+        currpos = sq;
+        loop {
+          //get diagonal direction.
+          match diag {
+            //for up right, check if wrapped around to a file. if so, break
+            0=> {currpos += constlib::northeast;
+                if currpos >= 64 || currpos % 8 <= 0 {break;}},
+            //for up left, check if wrapped around to h file. if so break
+            1=> {currpos += constlib::northwest;
+              if currpos >= 64 || currpos % 8 >= 7 {break;}},
+            2=> {currpos += constlib::southwest;
+              if currpos < 0 || currpos % 8 >= 7 {break;}},
+            3=> {currpos += constlib::southeast;
+              if currpos < 0 || currpos % 8 <=0 {break;}},
+            _ => panic!(),
+          }
+          attacks |= constlib::genShift(currpos, 1 as u64);
+          if constlib::genShift(currpos, 1 as u64) & blockers != 0 {
+            break;
+          }
+          //set the current position as a potential attack
+          
+          
+        }
+      }
+      return attacks
     }
-    pub fn generate_bishop_attack(square: u64) -> u64
-      {
-        let mask = 0;
+
+    //UNCOMMENT THIS IF YOU WANT PRECOMPUTED BISHOP TABLES, HOWEVER THIS SUCKS.
+    // pub fn init_bishop(&mut self) {
+    //     //index 0-3->diagonals
+    //     //index 4-7->orthogonals
+    //     for i in 0..64 {
+    //       let mut attacks = 0;
+    //       //current square
+    //       let pos = i;
+    //       let mut currpos: i8;
+    //       for diag in 0..4{
+    //         //start pos
+    //         currpos = pos;
+    //         loop {
+    //           //get diagonal direction.
+    //           match diag {
+    //             //for up right, check if wrapped around to a file. if so, break
+    //             0=> {currpos += constlib::northeast;
+    //                 if currpos >= 64 || currpos % 8 <= 0 {break;}},
+    //             //for up left, check if wrapped around to h file. if so break
+    //             1=> {currpos += constlib::northwest;
+    //               if currpos >= 64 || currpos % 8 >= 7 {break;}},
+    //             2=> {currpos += constlib::southwest;
+    //               if currpos < 0 || currpos % 8 >= 7 {break;}},
+    //             3=> {currpos += constlib::southeast;
+    //               if currpos < 0 || currpos % 8 <=0 {break;}},
+    //             _ => panic!(),
+    //           }
+              
+    //           //set the current position as a potential attack
+    //           attacks |= constlib::genShift(currpos, 1 as u64);
+              
+    //         }
+    //       }
+    //       self.bishop[i as usize] = attacks;
+    //     }
+    // }
+    pub fn compute_rook(&self, sq:i8, blockers:u64)->u64{
+      let mut attacks = 0;
+      let mut currpos: i8;
+      for ortho in 0..4 {
+        currpos = sq;
+        loop {
+          match ortho {
+            //for up, check if greater than 64. if so, break
+            0=> {currpos += constlib::north;
+              if currpos >= 64 {break;}},
+            //for left, check if wrapped around to h file. if so break
+            1=> {currpos += constlib::west;
+              if currpos < 0 || currpos % 8 >= 7 {break;}},
+            2=> {currpos += constlib::south;
+              if currpos < 0 {break;}},
+            3=> {currpos += constlib::east;
+              if currpos % 8 <=0 {break;}},
+            _ => panic!(),
+          }
+          attacks |= constlib::genShift(currpos, 1 as u64);
+          if constlib::genShift(currpos, 1 as u64) & blockers != 0 {break;}
+        }
+      }
+      attacks
         
-        return mask;
-      }
-    pub fn generate_rook_attack(square: u64) -> u64
-      {
-        let mask = 0;
-        return mask;
-      }
+    }
+    // pub fn init_rook(&mut self){
+    //   for i in 0..64 {
+    //     let mut attacks = 0;
+    //     let pos = i;
+    //     let mut currpos: i8;
+    //     for ortho in 0..4 {
+    //       currpos = pos;
+    //       loop {
+    //         match ortho {
+    //           //for up, check if greater than 64. if so, break
+    //           0=> {currpos += constlib::north;
+    //             if currpos >= 64 {break;}},
+    //           //for left, check if wrapped around to h file. if so break
+    //           1=> {currpos += constlib::west;
+    //             if currpos < 0 || currpos % 8 >= 7 {break;}},
+    //           2=> {currpos += constlib::south;
+    //             if currpos < 0 {break;}},
+    //           3=> {currpos += constlib::east;
+    //             if currpos % 8 <=0 {break;}},
+    //           _ => panic!(),
+    //         }
+    //         attacks |= constlib::genShift(currpos, 1 as u64);
+    //       }
+    //     }
+    //     self.rook[i as usize] = attacks;
+        
+    //   }
+    // }
+    
 
     
 }

@@ -31,7 +31,9 @@ impl Board {
             piecelocs: PieceLocations::new(),
         }
     }
-
+    pub fn push(&self, bm:Move) {
+        
+    }
     pub fn piece_exists_at(&self, rank: usize, file: usize) -> bool {
         //given rank and file
         let result = self.occupied >> (rank * 8 + file);
