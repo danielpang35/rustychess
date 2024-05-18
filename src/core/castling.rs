@@ -5,7 +5,9 @@ pub enum CastlingRights {
     BKingside = 0b0100,
     BQueenside = 0b1000,
 }
-
+impl CastlingRights {
+    
+}
 pub fn get_castling_mask(string: &str) -> u8 {
     let mut mask = 0;
     for c in string.chars() {

@@ -33,7 +33,7 @@ pub const fn initFileMaskLookup() -> [u64; 8] {
     let fileA = 0b0101010101010101;
     let mut arr = [0; 8];
     let mut i = 0;
-    while (i < 8) {
+    while i < 8 {
         arr[i] = fileA << (i);
         i+=1
     }

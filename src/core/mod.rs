@@ -1,13 +1,14 @@
 pub mod castling;
 pub mod movegen;
 pub mod piece;
-pub mod position;
 pub mod constlib;
 pub mod r#move;
 
 pub use piece::Piece;
 pub use piece::PieceLocations;
 pub use piece::PieceType;
+pub use r#move::Move;
+
 //a struct defining the physical aspects of the board
 pub struct Board {
     occupied: u64,
@@ -112,15 +113,14 @@ impl Board {
             _ => PieceType::NONE,
         };
         self.playerpieces[color] |= 1 << ind;
-        println!("Index into pieces; {}", piece as usize +(color*6));
+        // println!("Index into pieces; {}", piece as usize +(color*6));
         self.pieces[piece as usize + (color*6 ) - 1] |= 1 << ind;
         self.occupied |= 1 << ind;
         self.piecelocs.place(ind as u8, Piece::make(color as u8, piece));
       
     }
 
-    // pub fn make_move(&mut self, move: Move) {
-    // }
+    
 
     //returns string of board
     pub fn toStr(&self, mut input: String) -> String {
