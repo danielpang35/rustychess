@@ -52,7 +52,6 @@ impl MoveGenerator {
     pub fn generate(&self, board: &Board)->Vec<Move>
       {
         let mut moves = Vec::new();
-        println!("PICEINDX: {} {} ", PieceIndex::K.index(),PieceIndex::k.index());
         let mut checkers = self.getcheckers(board); 
         if checkers != 0
         {
@@ -134,9 +133,15 @@ impl MoveGenerator {
       let color = board.turn;
       let mut bbb = if (color == 0) {board.pieces[PieceIndex::B.index()]} else {board.pieces[PieceIndex::b.index()]};
       let them = if color == 0 {1} else {0};
+      
       while bbb != 0 {
         let ind = constlib::poplsb(&mut bbb);
         let mut attacks = self.compute_bishop(ind as i8,board.occupied);
+        if board.pinned[color as usize] & (1 << ind) != 0 {
+          //bishop is pinned, calculate legal moves
+
+          return
+        }
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
         //if evasion is turned on, then only generate attacks which block or take opposing checker
@@ -155,11 +160,17 @@ impl MoveGenerator {
       let color = board.turn;
       let enemy = if color == 0 {1} else {0};
       let mut kbb = if color == 0 {board.pieces[PieceIndex::N.index()]} else {board.pieces[PieceIndex::n.index()]};
+      
       while kbb != 0 {
         let ind = constlib::poplsb(&mut kbb);
+        if board.pinned[color as usize] & (1 << ind) != 0 {
+          //knight is pinned, just return
+          return
+        }
         let mut attacks = self.knight[ind as usize];
         attacks &= !board.playerpieces[color as usize];
         //if evasion is turned on, then only generate attacks which block or take opposing checker
+        
         if evasions {
           attacks &= target.0 | target.1;
         }
@@ -378,42 +389,7 @@ impl MoveGenerator {
       return attacks
     }
 
-    //UNCOMMENT THIS IF YOU WANT PRECOMPUTED BISHOP TABLES, HOWEVER THIS SUCKS.
-    // pub fn init_bishop(&mut self) {
-    //     //index 0-3->diagonals
-    //     //index 4-7->orthogonals
-    //     for i in 0..64 {
-    //       let mut attacks = 0;
-    //       //current square
-    //       let pos = i;
-    //       let mut currpos: i8;
-    //       for diag in 0..4{
-    //         //start pos
-    //         currpos = pos;
-    //         loop {
-    //           //get diagonal direction.
-    //           match diag {
-    //             //for up right, check if wrapped around to a file. if so, break
-    //             0=> {currpos += constlib::northeast;
-    //                 if currpos >= 64 || currpos % 8 <= 0 {break;}},
-    //             //for up left, check if wrapped around to h file. if so break
-    //             1=> {currpos += constlib::northwest;
-    //               if currpos >= 64 || currpos % 8 >= 7 {break;}},
-    //             2=> {currpos += constlib::southwest;
-    //               if currpos < 0 || currpos % 8 >= 7 {break;}},
-    //             3=> {currpos += constlib::southeast;
-    //               if currpos < 0 || currpos % 8 <=0 {break;}},
-    //             _ => panic!(),
-    //           }
-              
-    //           //set the current position as a potential attack
-    //           attacks |= constlib::genShift(currpos, 1 as u64);
-              
-    //         }
-    //       }
-    //       self.bishop[i as usize] = attacks;
-    //     }
-    // }
+    
     pub fn compute_rook(&self, sq:i8, blockers:u64)->u64{
       let mut attacks = 0;
       let mut currpos: i8;
@@ -440,7 +416,7 @@ impl MoveGenerator {
       attacks
         
     }
-    pub fn makeattackermask(&self, board:&Board, blockers:u64) -> u64 {
+    pub fn makeattackedmask(&self, board:&Board, blockers:u64) -> u64 {
       let color = board.turn;
       let enemy = if color == 0 {1} else {0};
       let mut attacks = 0;
@@ -480,7 +456,7 @@ impl MoveGenerator {
       let mut kingdanger = 0;
       let blockers = board.occupied & !board.pieces[kingidx];
 
-      kingdanger |= self.makeattackermask(board, blockers);
+      kingdanger |= self.makeattackedmask(board, blockers);
       kingdanger
     }
 
@@ -508,7 +484,39 @@ impl MoveGenerator {
                 |  ((batt | ratt) & qbb);
       attackers
     }
-
+    pub fn getpinned(&self, board:&Board) -> u64 {
+      let color = board.turn;
+      let enemy = if color == 0 {1} else {0};
+      let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
+      let mut king = board.pieces[kingidx];
+      let kingsq = constlib::poplsb(&mut king) as i8;
+      //get square of king
+      let blockers = board.occupied;
+      let mut pinnablemask = 0;
+      //get all possible directions of attack with no blockers
+      let mut bbb = board.pieces[(6*enemy+PieceIndex::B.index())];
+      let mut rbb = board.pieces[(6*enemy+PieceIndex::R.index())];
+      let mut qbb = board.pieces[(6*enemy+PieceIndex::Q.index())];
+      let mut sliders = 0;
+      while bbb != 0 {
+        let ind = constlib::poplsb(&mut bbb);
+        sliders |= self.compute_bishop(ind as i8, blockers);
+      }
+      while qbb != 0 {
+        let ind = constlib::poplsb(&mut qbb);
+        sliders |= self.compute_bishop(ind as i8, blockers) | self.compute_rook(ind as i8, blockers);
+      }
+      while rbb != 0{ 
+        let ind = constlib::poplsb(&mut rbb);
+        sliders |= self.compute_rook(ind as i8, blockers);
+      }
+      let pinnablemask = self.compute_bishop(kingsq, blockers) | self.compute_rook(kingsq, blockers);
+      let pinned = pinnablemask & sliders & board.playerpieces[color as usize];
+      constlib::print_bitboard(pinned);
+      pinned
+      
+    }
+    
     pub fn genevasions(&self, board:&Board, movelist: &mut Vec<Move>, checkers: &mut u64) {
       let mut kingbb = if board.turn == 0 {board.pieces[PieceIndex::K.index()]} else {board.pieces[PieceIndex::k.index()]};
       let kingsq = constlib::poplsb(&mut kingbb);
@@ -532,6 +540,7 @@ impl MoveGenerator {
         let piecetype = board.piecelocs.piece_at(checkersq as u8).get_piece_type();
         println!("Checker: {}, king: {}", constlib::squaretouci(checkersq),constlib::squaretouci(kingsq));
         let block_mask = match piecetype {
+          //get the squares that a piece can move to to block check
           PieceType::R | PieceType::Q | PieceType::B => Self::get_ray_mask(checkersq as i8,kingsq as i8),
           _ => 0,
         };

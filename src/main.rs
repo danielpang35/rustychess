@@ -11,7 +11,7 @@ fn main() {
     let s = String::new();
     //board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
     //
-    board.from_fen(String::from("8/8/8/2k5/3Pp3/8/8/4K3 b - d3 0 1    "));
+    board.from_fen(String::from("8/8/8/2kPp2R/8/4n3/8/4K1Q1 b - - 0 1    "));
     let mg = core::movegen::MoveGenerator::new();
     let ml = mg.generate(&board);
     for bm in ml {

@@ -18,6 +18,7 @@ pub struct Board {
     castling_rights: u8,
     ep_square: u8,
     piecelocs: PieceLocations,
+    pinned: [u64; 2],
 }
 impl Board {
     //constructor
@@ -30,10 +31,16 @@ impl Board {
             castling_rights: 15,
             ep_square: 0,
             piecelocs: PieceLocations::new(),
+            pinned: [0; 2],
         }
     }
     pub fn push(&self, bm:Move) {
-        
+
+    }
+
+    pub fn setPinned(&mut self, pinned:u64) {
+        let color = self.turn;
+        self.pinned[color as usize] = pinned;
     }
     pub fn piece_exists_at(&self, rank: usize, file: usize) -> bool {
         //given rank and file
@@ -96,6 +103,7 @@ impl Board {
             }
         }
         self.ep_square = ep_sq;
+        self.pinned[self.turn as usize] = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
     }
 
     //updates the board state by placing a piece at a location
