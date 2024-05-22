@@ -18,7 +18,8 @@ pub struct Board {
     castling_rights: u8,
     ep_square: u8,
     piecelocs: PieceLocations,
-    pinned: [u64; 2],
+    pinned: [u64; 2], //friendly pieces
+    pinners: [u64; 2], //enemy pieces
 }
 impl Board {
     //constructor
@@ -32,6 +33,7 @@ impl Board {
             ep_square: 0,
             piecelocs: PieceLocations::new(),
             pinned: [0; 2],
+            pinners: [0; 2],
         }
     }
     pub fn push(&self, bm:Move) {
@@ -103,7 +105,11 @@ impl Board {
             }
         }
         self.ep_square = ep_sq;
-        self.pinned[self.turn as usize] = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
+        //get pininfo (eventually, think about refactoring this. look how ugly that is. Brother ewww)
+        let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
+        self.pinned[self.turn as usize] = pininfo.0;
+        self.pinners[self.turn as usize] = pininfo.1;
+
     }
 
     //updates the board state by placing a piece at a location

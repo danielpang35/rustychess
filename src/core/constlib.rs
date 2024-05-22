@@ -91,3 +91,4 @@ pub fn squaretouci(square: u8) -> String {
   let rank = (square / 8) + 1 + b'0';
   format!("{}{}", file as char, rank as char)
 }
+

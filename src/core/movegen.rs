@@ -29,6 +29,7 @@ pub struct MoveGenerator {
     pub pawnmoves: [[u64; 64];2], 
     pub bishop: [u64; 64],
     pub rook: [u64; 64],
+    pub line_between:[[u64;64];64],
 }
 
 impl MoveGenerator {
@@ -41,11 +42,13 @@ impl MoveGenerator {
             pawnmoves: [[0;64];2],
             bishop: [0; 64],
             rook: [0; 64],
+            line_between:[[0;64];64],
         };
         moveg.init_king();
         moveg.init_knight();
         moveg.init_pawnattacks();
         moveg.init_pawnmoves();
+        moveg.gen_line_bbs();
         moveg
     }
   
@@ -96,6 +99,14 @@ impl MoveGenerator {
         let mut attacks = self.compute_rook(ind as i8,board.occupied) | self.compute_bishop(ind as i8, board.occupied);
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
+        if board.pinned[color as usize] & (1 << ind) != 0 {
+          let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
+          let mut kbb = board.pieces[kingidx];
+          let kingsq = constlib::poplsb(&mut kbb);
+          attacks &= self.line_between[kingsq as usize][ind as usize];
+          constlib::print_bitboard(attacks);
+          println!("queen legalmoves");
+        }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
           attacks &= target.0 | target.1;
@@ -117,6 +128,14 @@ impl MoveGenerator {
         let mut attacks = self.compute_rook(ind as i8,board.occupied);
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
+        if board.pinned[color as usize] & (1 << ind) != 0 {
+          let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
+          let mut kbb = board.pieces[kingidx];
+          let kingsq = constlib::poplsb(&mut kbb);
+          attacks &= self.line_between[kingsq as usize][ind as usize];
+          constlib::print_bitboard(attacks);
+          println!("rook legalmoves");
+        }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
           attacks &= target.0 | target.1;
@@ -137,13 +156,16 @@ impl MoveGenerator {
       while bbb != 0 {
         let ind = constlib::poplsb(&mut bbb);
         let mut attacks = self.compute_bishop(ind as i8,board.occupied);
-        if board.pinned[color as usize] & (1 << ind) != 0 {
-          //bishop is pinned, calculate legal moves
-
-          return
-        }
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
+        if board.pinned[color as usize] & (1 << ind) != 0 {
+          let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
+          let mut kbb = board.pieces[kingidx];
+          let kingsq = constlib::poplsb(&mut kbb);
+          attacks &= self.line_between[kingsq as usize][ind as usize];
+          constlib::print_bitboard(attacks);
+          println!("bishop legalmoves");
+        }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
           attacks &= target.0 | target.1;
@@ -198,6 +220,14 @@ impl MoveGenerator {
         //moves are legal if square is not occupied
         let mut moves = self.pawnmoves[color as usize][ind as usize];
         moves &= !board.occupied;
+        if board.pinned[color as usize] & (1 << ind) != 0 {
+          let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
+          let mut kbb = board.pieces[kingidx];
+          let kingsq = constlib::poplsb(&mut kbb);
+          moves &= self.line_between[kingsq as usize][ind as usize];
+          constlib::print_bitboard(moves);
+          println!("pawn legalmoves");
+        }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
           moves &= target.1;
@@ -242,6 +272,7 @@ impl MoveGenerator {
         if evasions {
           attacks &= target.0 | target.1;
         }
+        
         if(self.pawnattacks[color as usize][ind as usize] & (1<<board.ep_square) != 0)
         {
           if evasions {
@@ -353,8 +384,6 @@ impl MoveGenerator {
         }
       }
     pub fn compute_bishop(&self,sq:i8,blockers:u64) -> u64{
-      //index 0-3->diagonals
-      //index 4-7->orthogonals
       
       let mut attacks = 0;
       //current square
@@ -484,7 +513,7 @@ impl MoveGenerator {
                 |  ((batt | ratt) & qbb);
       attackers
     }
-    pub fn getpinned(&self, board:&Board) -> u64 {
+    pub fn getpinned(&self, board:&Board) -> (u64,u64){
       let color = board.turn;
       let enemy = if color == 0 {1} else {0};
       let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
@@ -492,31 +521,57 @@ impl MoveGenerator {
       let kingsq = constlib::poplsb(&mut king) as i8;
       //get square of king
       let blockers = board.occupied;
-      let mut pinnablemask = 0;
-      //get all possible directions of attack with no blockers
+      //get all possible squares that a pinned piece could be along
+      let pinnablemask = self.compute_bishop(kingsq, blockers) | self.compute_rook(kingsq, blockers);
+      
+      //get all sliding attacks of enemy.
       let mut bbb = board.pieces[(6*enemy+PieceIndex::B.index())];
       let mut rbb = board.pieces[(6*enemy+PieceIndex::R.index())];
       let mut qbb = board.pieces[(6*enemy+PieceIndex::Q.index())];
       let mut sliders = 0;
+      let pinnables = board.playerpieces[color as usize];
+      let mut pinners = 0;
       while bbb != 0 {
         let ind = constlib::poplsb(&mut bbb);
-        sliders |= self.compute_bishop(ind as i8, blockers);
+        let batt = self.compute_bishop(ind as i8, blockers);
+        if batt & pinnablemask & pinnables != 0 {
+          //if the bishop attack intersects the pinnablemask and friendly pieces, bishop is a pinner
+          pinners |= 1 << ind;
+        }
+        sliders |= batt;
       }
       while qbb != 0 {
         let ind = constlib::poplsb(&mut qbb);
-        sliders |= self.compute_bishop(ind as i8, blockers) | self.compute_rook(ind as i8, blockers);
+        let qatt = self.compute_bishop(ind as i8, blockers) | self.compute_rook(ind as i8, blockers);
+        if qatt & pinnablemask & pinnables != 0 {
+          pinners |= 1 << ind;
+        }
+        sliders |= qatt
       }
       while rbb != 0{ 
         let ind = constlib::poplsb(&mut rbb);
-        sliders |= self.compute_rook(ind as i8, blockers);
+        let ratt = self.compute_rook(ind as i8, blockers);
+        if ratt & pinnablemask & pinnables != 0 {
+          pinners |= 1 << ind;
+        }
+        sliders |= ratt;
       }
-      let pinnablemask = self.compute_bishop(kingsq, blockers) | self.compute_rook(kingsq, blockers);
-      let pinned = pinnablemask & sliders & board.playerpieces[color as usize];
-      constlib::print_bitboard(pinned);
-      pinned
+      let pinned = pinnablemask & sliders & pinnables;
+      (pinned, pinners)
       
     }
-    
+    // pub fn getlegalpinnedmoves(pinners: &mut u64) -> u64 {
+    //   let color = board.turn;
+    //   let color = board.turn;
+    //   let enemy = if color == 0 {1} else {0};
+    //   let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
+    //   let mut king = board.pieces[kingidx];
+    //   let kingsq = constlib::poplsb(&mut king) as i8;
+    //   while pinners != 0 {
+    //     let ind = constlib::poplsb(&mut pinners);
+
+    //   }
+    // }
     pub fn genevasions(&self, board:&Board, movelist: &mut Vec<Move>, checkers: &mut u64) {
       let mut kingbb = if board.turn == 0 {board.pieces[PieceIndex::K.index()]} else {board.pieces[PieceIndex::k.index()]};
       let kingsq = constlib::poplsb(&mut kingbb);
@@ -554,7 +609,7 @@ impl MoveGenerator {
       }
       println!("ct{}",ct);
     }
-
+    
     fn get_ray_mask(source_square: i8, target_square: i8) -> u64 {
       let mut ray_mask = 0;
       let mut square = source_square as i8;
@@ -614,7 +669,25 @@ impl MoveGenerator {
         
     //   }
     // }
-    
+
+    pub fn gen_line_bbs(&mut self) {
+      for i in 0..64_i8 {
+          for j in 0..64_i8 {
+              let i_bb: u64 = 1_u64 << i;
+              let j_bb: u64 = 1_u64 << j;
+              if self.compute_rook(i, 0) & j_bb != 0 {
+                  self.line_between[i as usize][j as usize] |=
+                      (self.compute_rook(j,0) & self.compute_rook(i,0)) | i_bb | j_bb;
+              } else if self.compute_bishop(i, 0) & j_bb != 0 {
+                  self.line_between[i as usize][j as usize] |=
+                      (self.compute_bishop(j,0) & self.compute_bishop(i,0)) | i_bb | j_bb;
+              } else {
+                  self.line_between[i as usize][j as usize] = 0;
+              }
+          }
+      }
+    }
+
 
     
 }
