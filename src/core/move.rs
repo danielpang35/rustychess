@@ -98,6 +98,13 @@ impl Move {
     pub fn makeEP(src:u8, dst:u8) -> Move {
       Move::make(src,dst,Move::FLAG_EP)
     }
+    pub fn makeKingCastle(src:u8, dst:u8) -> Move {
+      Move::make(src, dst, Move::FLAG_KING_CASTLE)
+    }
+    pub fn makeQueenCastle(src:u8, dst:u8) -> Move {
+      Move::make(src, dst, Move::FLAG_QUEEN_CASTLE)
+    }
+    
     pub fn flag(self) -> u16 {
       //return flag bits of self
       return (self.data & FLAG_MASK) >> 12

@@ -8,7 +8,7 @@ pub use piece::Piece;
 pub use piece::PieceLocations;
 pub use piece::PieceType;
 pub use r#move::Move;
-
+pub use castling::CastlingRights;
 //a struct defining the physical aspects of the board
 pub struct Board {
     occupied: u64,
@@ -20,6 +20,7 @@ pub struct Board {
     piecelocs: PieceLocations,
     pinned: [u64; 2], //friendly pieces
     pinners: [u64; 2], //enemy pieces
+    attacked: [u64; 2],
 }
 impl Board {
     //constructor
@@ -29,11 +30,12 @@ impl Board {
             pieces: [0; 12],
             playerpieces: [0; 2],
             turn: 0,
-            castling_rights: 15,
+            castling_rights: 0,
             ep_square: 0,
             piecelocs: PieceLocations::new(),
             pinned: [0; 2],
             pinners: [0; 2],
+            attacked: [0; 2],
         }
     }
     pub fn push(&self, bm:Move) {
@@ -76,9 +78,7 @@ impl Board {
         }
 
         let castling_rights = fields.next().unwrap();
-        let mask = castling::get_castling_mask(castling_rights);
-        self.castling_rights = mask;
-
+        self.castling_rights = castling::get_castling_mask(castling_rights);
         let mut ep_sq = 0;
         let ep = fields.next().unwrap();
         for (i, ch) in ep.chars().enumerate() {
@@ -109,7 +109,7 @@ impl Board {
         let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
         self.pinned[self.turn as usize] = pininfo.0;
         self.pinners[self.turn as usize] = pininfo.1;
-
+        self.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied)
     }
 
     //updates the board state by placing a piece at a location

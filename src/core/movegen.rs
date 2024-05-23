@@ -1,6 +1,7 @@
 use super::*;
 use crate::core::constlib;
 use crate::core::r#move::*;
+use crate::core::castling::*;
 pub enum PieceIndex {
   P,
   N,
@@ -89,6 +90,7 @@ impl MoveGenerator {
           } else {movelist.push(Move::makeQuiet(ind,dst));}
         }
       }
+      self.generatecastling(board, movelist);
     }
     pub fn generatequeenmoves(&self, board:&Board, movelist:&mut Vec<Move>,evasions:bool,target:(u64,u64)) {
       let color = board.turn;
@@ -444,6 +446,49 @@ impl MoveGenerator {
       }
       attacks
         
+    }
+
+    pub fn generatecastling(&self, board:&Board, movelist: &mut Vec<Move>){
+      let color = board.turn;
+      let kingsq = if color == 0 {4} else {60};
+      let attacked = board.attacked[color as usize];
+      if color == 0
+      { 
+        //generate white caslting moves
+        if wkingside(board.castling_rights) {
+          //check if castling is obstructed
+          let between = constlib::squarebb_from_string("f1") | constlib::squarebb_from_string("g1");
+          constlib::print_bitboard(between);
+          if (board.occupied & between != 0) || (between & attacked != 0){
+          } else {
+            movelist.push(Move::makeKingCastle(kingsq,7))
+          }
+        }
+        if wqueenside(board.castling_rights) {
+          let between = constlib::squarebb_from_string("b1") |constlib::squarebb_from_string("c1") | constlib::squarebb_from_string("d1");
+          if (board.occupied & between != 0) || (between & attacked != 0){
+          } else {
+            movelist.push(Move::makeQueenCastle(kingsq,0))
+          }
+        }
+      } else {
+        //black castling 
+        if bkingside(board.castling_rights) {
+          let between = constlib::squarebb_from_string("f8") | constlib::squarebb_from_string("g8");
+          if (board.occupied & between != 0) || (between & attacked != 0){
+          } else {
+            movelist.push(Move::makeKingCastle(kingsq,63))
+          }
+        }
+        if bqueenside(board.castling_rights) {
+          let between = constlib::squarebb_from_string("b8") |constlib::squarebb_from_string("c8") | constlib::squarebb_from_string("d8");
+          if (board.occupied & between != 0) || (between & attacked != 0){
+          } else {
+            movelist.push(Move::makeQueenCastle(kingsq,56))
+          }
+        }
+      }
+      
     }
     pub fn makeattackedmask(&self, board:&Board, blockers:u64) -> u64 {
       let color = board.turn;
