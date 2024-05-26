@@ -82,6 +82,42 @@ pub fn print_bitboard(bitboard: u64) {
   println!("----------------------------\n");
 
 }
+pub fn square_from_string(square_str:&str) -> u8 {
+  let mut square_value: u8 = 64; // Initialize with an invalid value
+
+  if square_str.len() == 2 {
+      let file = square_str.chars().next().unwrap();
+      let rank = square_str.chars().nth(1).unwrap();
+
+      let file_value = match file {
+          'a' => 0,
+          'b' => 1,
+          'c' => 2,
+          'd' => 3,
+          'e' => 4,
+          'f' => 5,
+          'g' => 6,
+          'h' => 7,
+          _ => return 64, // Return the invalid value if the file is invalid
+      };
+
+      let rank_value = match rank {
+          '1' => 0,
+          '2' => 1,
+          '3' => 2,
+          '4' => 3,
+          '5' => 4,
+          '6' => 5,
+          '7' => 6,
+          '8' => 7,
+          _ => return 64, // Return the invalid value if the rank is invalid
+      };
+
+      square_value = (rank_value * 8 + file_value) as u8;
+  }
+
+  square_value
+}
 pub fn squarebb_from_string(square_str: &str) -> u64 {
   let mut square_value: u8 = 64; // Initialize with an invalid value
 

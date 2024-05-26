@@ -72,7 +72,9 @@ impl Move {
         }
         return vec;
       }
-
+    pub fn is_null(self) -> bool {
+      self.data == 0
+    }
     pub fn make(src: u8, dst:u8, flag:u16) -> Move
     //make a bitmove given src, destination and flag
     { 
@@ -122,7 +124,8 @@ impl Move {
       return (self.data & CP_MASK) != 0;
     }
     pub fn iscastle(self)->bool{
-      (self.data << 13 )== 1
+
+      (self.data >> 13 ) == 1
     }
     pub fn iskingcastle(self)->bool{
       self.flag() == Move::FLAG_KING_CASTLE

@@ -11,13 +11,15 @@ fn main() {
     let s = String::new();
     //board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
     //
-    board.from_fen(String::from("r3k2r/pppp1ppp/4p3/6B1/8/4P3/PPPP1PPP/R3K2R b KQkq - 0 1    "));
+    board.from_fen(String::from("8/8/8/4k3/8/4n3/3P4/K7 w - - 0 1   "));
     let mg = core::movegen::MoveGenerator::new();
     let ml = mg.generate(&board);
+    println!("Movelist length: {}", ml.len());
+    let m = ml[2];
     for bm in ml {
         bm.print();
     }
+    board.push(m);
     println!("{}",board.toStr(s));
-    println!("{}",board.piece_exists_at(0,0));
-    let p = core::piece::Piece::make(0, core::piece::PieceType::P);
+
 }

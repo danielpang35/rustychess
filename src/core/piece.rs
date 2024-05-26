@@ -72,7 +72,17 @@ impl Piece {
         //     return false;
         // }
     }
-
+    pub fn getidx(self) -> usize {
+        unsafe {
+            let mut idx = self.get_piece_type() as usize - 1;
+            if self.get_color() {
+                //black piece
+                idx += 6;
+            }
+            idx
+            
+        }
+    }
     pub fn get_piece_type(self) -> PieceType 
       {return unsafe { mem::transmute((self as u8) & 0b0111) };
     }
@@ -89,9 +99,10 @@ impl PieceLocations {
         }
     }
     pub fn place(&mut self, sq: u8, piece: Piece) {
+        println!("Placing piece at square: {}",sq);
         self.locs[sq as usize] = piece;
     }
-    pub fn remove(&mut self, sq: u8, piece: Piece) {
+    pub fn remove(&mut self, sq: u8) {
         self.locs[sq as usize] = Piece::None;
     }
     pub fn piece_at(&self, sq: u8) -> Piece {

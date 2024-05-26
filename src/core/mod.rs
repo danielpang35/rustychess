@@ -9,18 +9,22 @@ pub use piece::PieceLocations;
 pub use piece::PieceType;
 pub use r#move::Move;
 pub use castling::CastlingRights;
+
+pub use std::rc::Rc;
 //a struct defining the physical aspects of the board
 pub struct Board {
-    occupied: u64,
-    pieces: [u64; 12], //a bitboard for each piece
-    playerpieces: [u64; 2],
-    turn: u8,
-    castling_rights: u8,
-    ep_square: u8,
-    piecelocs: PieceLocations,
-    pinned: [u64; 2], //friendly pieces
-    pinners: [u64; 2], //enemy pieces
-    attacked: [u64; 2],
+    pub occupied: u64,
+    pub pieces: [u64; 12], //a bitboard for each piece
+    pub playerpieces: [u64; 2],
+    pub turn: u8,
+    pub castling_rights: u8,
+    pub ep_square: u8,
+    pub piecelocs: PieceLocations,
+    pub pinned: [u64; 2], //friendly pieces
+    pub pinners: [u64; 2], //enemy pieces
+    pub attacked: [u64; 2],
+    pub prev: Option<Rc<Board>>,
+    pub prev_move: Move,
 }
 impl Board {
     //constructor
@@ -36,16 +40,93 @@ impl Board {
             pinned: [0; 2],
             pinners: [0; 2],
             attacked: [0; 2],
+            prev: None,
+            prev_move: Move::new(),
         }
     }
-    pub fn push(&self, bm:Move) {
-
-    }
-
-    pub fn setPinned(&mut self, pinned:u64) {
+    pub fn push(&mut self, bm:Move) {
+        println!("Pushing move to board");
+        bm.print();
         let color = self.turn;
-        self.pinned[color as usize] = pinned;
+        let enemy = if color == 0 {1} else {0};
+        //push a move to the board
+        //unpack move
+        let quiet = bm.isquiet();
+        let ep = bm.isep();
+        let castle = bm.iscastle();
+        let capture = bm.iscapture();
+        let prom = bm.isprom();
+        let dbpush = bm.isdoublepawn();
+        let from = bm.getSrc();
+        let to = bm.getDst();
+        let piece = self.piecelocs.piece_at(from);
+
+        //update occupied bitboard
+        self.occupied ^= (1 << from);
+        self.occupied |= (1 <<to);
+        constlib::print_bitboard(self.occupied);
+
+        //update piece bitboards
+        let pieceidx = piece.getidx();
+        self.pieces[pieceidx] ^= (1<<from) | (1<<to);
+        println!("Moved piece {} from square {}",pieceidx, from);
+        if capture {
+            //if a piece was captured, toggle the bit that it was on on its bitboard
+            let capturedidx = self.piecelocs.piece_at(to).getidx();
+            self.pieces[capturedidx] ^= (1<<to);
+            constlib::print_bitboard(self.pieces[capturedidx]);
+            println!("Removed piece {} from square {}",capturedidx, to);
+
+            //also remove enemy piece from enemy playerpiece bitboard
+            self.playerpieces[enemy as usize] ^= (1<<to);
+        }
+
+        //toggle our playerpieces bitboard
+        self.playerpieces[color as usize] ^= (1<<from) | (1<<to);
+        println!("Friendly pieces bitboard:");
+        constlib::print_bitboard(self.playerpieces[color as usize]);
+        println!("Enemy pieces bitboard:");
+        constlib::print_bitboard(self.playerpieces[enemy as usize]);
+
+        //update piecelocations
+        self.piecelocs.place(to, piece);
+        self.piecelocs.remove(from);
+        println!("piece {}",piece.get_piece_type().get_piece_type());
+
+        //update ep
+        if dbpush {
+            self.ep_square = if self.turn == 0 {to + 8} else {to - 8};
+            constlib::print_bitboard(constlib::squaretobb(self.ep_square));
+            println!("Updated EP");
+        } else {
+            self.ep_square = 0;
+        }
+        if !castling::oppressed(self.castling_rights) {
+            //if there are still castling rights
+            //if a rook or king's starting square is the starting square or ending square of a move,
+            //remove that side from the castling rights
+            let updatecastlemask = !(castling::get_rights(to) | castling::get_rights(from));
+            // println!("queenside castle was:{}", castling::wqueenside(self.castling_rights));
+
+            // println!("Updating castle mask with : {}", format!("{updatecastlemask:b}"));
+            self.castling_rights &= updatecastlemask;
+        }
+        //stupidity check
+        assert!(from != to);
+        //update occupied, pieces, playerpieces, change turn, update castling rights, update ep square, update piecelocs
+
+        //update pininfo and attacked squares
+        //also yea... you need to refactor this ugly ass code...
+        let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
+        self.pinned[color as usize] = pininfo.0;
+        self.pinners[color as usize] = pininfo.1;
+        self.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
+
+        //update turn
+        self.turn = enemy;
     }
+
+
     pub fn piece_exists_at(&self, rank: usize, file: usize) -> bool {
         //given rank and file
         let result = self.occupied >> (rank * 8 + file);

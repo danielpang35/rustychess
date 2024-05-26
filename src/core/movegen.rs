@@ -449,7 +449,12 @@ impl MoveGenerator {
     }
 
     pub fn generatecastling(&self, board:&Board, movelist: &mut Vec<Move>){
+      //generate castling moves
       let color = board.turn;
+      if oppressed(board.castling_rights) {
+        //if there are no castling rights, return
+        return
+      }
       let kingsq = if color == 0 {4} else {60};
       let attacked = board.attacked[color as usize];
       if color == 0
