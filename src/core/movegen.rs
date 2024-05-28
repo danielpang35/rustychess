@@ -2,25 +2,7 @@ use super::*;
 use crate::core::constlib;
 use crate::core::r#move::*;
 use crate::core::castling::*;
-pub enum PieceIndex {
-  P,
-  N,
-  B,
-  R,
-  Q,
-  K,
-  p,
-  n,
-  b,
-  r,
-  q,
-  k,
-}
-impl PieceIndex {
-  pub fn index(self)->usize {
-    unsafe {self as usize}
-  }
-}
+use crate::core::piece::PieceIndex;
 
 pub struct MoveGenerator {
     //precomputed attack bitboard for each square of the board
@@ -106,8 +88,6 @@ impl MoveGenerator {
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
           attacks &= self.line_between[kingsq as usize][ind as usize];
-          constlib::print_bitboard(attacks);
-          println!("queen legalmoves");
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
@@ -135,8 +115,6 @@ impl MoveGenerator {
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
           attacks &= self.line_between[kingsq as usize][ind as usize];
-          constlib::print_bitboard(attacks);
-          println!("rook legalmoves");
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
@@ -165,8 +143,6 @@ impl MoveGenerator {
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
           attacks &= self.line_between[kingsq as usize][ind as usize];
-          constlib::print_bitboard(attacks);
-          println!("bishop legalmoves");
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
@@ -184,7 +160,6 @@ impl MoveGenerator {
       let color = board.turn;
       let enemy = if color == 0 {1} else {0};
       let mut kbb = if color == 0 {board.pieces[PieceIndex::N.index()]} else {board.pieces[PieceIndex::n.index()]};
-      
       while kbb != 0 {
         let ind = constlib::poplsb(&mut kbb);
         if board.pinned[color as usize] & (1 << ind) != 0 {
@@ -192,10 +167,11 @@ impl MoveGenerator {
           return
         }
         let mut attacks = self.knight[ind as usize];
+
         attacks &= !board.playerpieces[color as usize];
         //if evasion is turned on, then only generate attacks which block or take opposing checker
-        
         if evasions {
+          println!("king is in check, generate evasions");
           attacks &= target.0 | target.1;
         }
         while attacks != 0 {
@@ -227,8 +203,6 @@ impl MoveGenerator {
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
           moves &= self.line_between[kingsq as usize][ind as usize];
-          constlib::print_bitboard(moves);
-          println!("pawn legalmoves");
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
@@ -463,7 +437,6 @@ impl MoveGenerator {
         if wkingside(board.castling_rights) {
           //check if castling is obstructed
           let between = constlib::squarebb_from_string("f1") | constlib::squarebb_from_string("g1");
-          constlib::print_bitboard(between);
           if (board.occupied & between != 0) || (between & attacked != 0){
           } else {
             movelist.push(Move::makeKingCastle(kingsq,7))
@@ -551,7 +524,6 @@ impl MoveGenerator {
       let bbb = board.pieces[(6*enemy+PieceIndex::B.index())];
       let rbb = board.pieces[(6*enemy+PieceIndex::R.index())];
       let qbb = board.pieces[(6*enemy+PieceIndex::Q.index())];
-      let kbb = board.pieces[(6*enemy+PieceIndex::K.index())];
 
       let blockers = board.occupied;
       let batt = self.compute_bishop(kingsq, blockers);
@@ -573,7 +545,6 @@ impl MoveGenerator {
       let blockers = board.occupied;
       //get all possible squares that a pinned piece could be along
       let pinnablemask = self.compute_bishop(kingsq, blockers) | self.compute_rook(kingsq, blockers);
-      
       //get all sliding attacks of enemy.
       let mut bbb = board.pieces[(6*enemy+PieceIndex::B.index())];
       let mut rbb = board.pieces[(6*enemy+PieceIndex::R.index())];
@@ -583,7 +554,7 @@ impl MoveGenerator {
       let mut pinners = 0;
       while bbb != 0 {
         let ind = constlib::poplsb(&mut bbb);
-        let batt = self.compute_bishop(ind as i8, blockers);
+        let batt = Self::get_ray_mask(kingsq, ind as i8);
         if batt & pinnablemask & pinnables != 0 {
           //if the bishop attack intersects the pinnablemask and friendly pieces, bishop is a pinner
           pinners |= 1 << ind;
@@ -592,7 +563,7 @@ impl MoveGenerator {
       }
       while qbb != 0 {
         let ind = constlib::poplsb(&mut qbb);
-        let qatt = self.compute_bishop(ind as i8, blockers) | self.compute_rook(ind as i8, blockers);
+        let qatt = Self::get_ray_mask(kingsq, ind as i8);
         if qatt & pinnablemask & pinnables != 0 {
           pinners |= 1 << ind;
         }
@@ -600,7 +571,7 @@ impl MoveGenerator {
       }
       while rbb != 0{ 
         let ind = constlib::poplsb(&mut rbb);
-        let ratt = self.compute_rook(ind as i8, blockers);
+        let ratt = Self::get_ray_mask(kingsq, ind as i8);
         if ratt & pinnablemask & pinnables != 0 {
           pinners |= 1 << ind;
         }
@@ -690,6 +661,37 @@ impl MoveGenerator {
           ray_mask |= 1 << square;
       }
       ray_mask
+  }
+  fn get_ray_mask_blockers(source_square: i8, target_square: i8, blockers: u64) -> u64 {
+    let mut ray_mask = 0;
+    let mut square = source_square as i8;
+    loop {
+        let file_diff = (target_square % 8) as isize - (square % 8) as isize;
+        let rank_diff = (target_square / 8) as isize - (square / 8) as isize;
+
+        if file_diff == 0 {
+            // Vertical ray
+            square += if rank_diff > 0 { 8 } else { -8 };
+        } else if rank_diff == 0 {
+            // Horizontal ray
+            square += if file_diff > 0 { 1 } else { -1 };
+        } else if file_diff.abs() == rank_diff.abs() {
+            // Diagonal ray
+            let file_step = if file_diff > 0 { 1 } else { -1 };
+            let rank_step = if rank_diff > 0 { 8 } else { -8 };
+            square += file_step + rank_step;
+        } else {
+            // Invalid ray, should not happen
+            break;
+        }
+        if square == target_square as i8 || (1<<square) & blockers != 0{
+          break;
+        }
+        // Skip the source square and the target square
+        
+        ray_mask |= 1 << square;
+    }
+    ray_mask
   }
     // pub fn init_rook(&mut self){
     //   for i in 0..64 {

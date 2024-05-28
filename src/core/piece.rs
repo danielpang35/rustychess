@@ -87,7 +87,7 @@ impl Piece {
       {return unsafe { mem::transmute((self as u8) & 0b0111) };
     }
 }
-
+#[derive(Clone, Copy)]
 pub struct PieceLocations {
     locs: [Piece; 64],
 }
@@ -99,7 +99,6 @@ impl PieceLocations {
         }
     }
     pub fn place(&mut self, sq: u8, piece: Piece) {
-        println!("Placing piece at square: {}",sq);
         self.locs[sq as usize] = piece;
     }
     pub fn remove(&mut self, sq: u8) {
@@ -109,3 +108,23 @@ impl PieceLocations {
         self.locs[sq as usize]
     }
 }
+
+pub enum PieceIndex {
+    P,
+    N,
+    B,
+    R,
+    Q,
+    K,
+    p,
+    n,
+    b,
+    r,
+    q,
+    k,
+  }
+  impl PieceIndex {
+    pub fn index(self)->usize {
+      unsafe {self as usize}
+    }
+  }
