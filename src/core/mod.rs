@@ -3,6 +3,7 @@ pub mod movegen;
 pub mod piece;
 pub mod constlib;
 pub mod r#move;
+pub mod state;
 
 pub use piece::Piece;
 pub use piece::PieceLocations;
@@ -10,13 +11,13 @@ pub use piece::PieceType;
 pub use piece::PieceIndex;
 pub use r#move::Move;
 pub use castling::CastlingRights;
-
+pub use state::BoardState;
 pub use std::rc::Rc;
 
 
 
 //a struct defining the physical aspects of the board
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct Board {
     pub occupied: u64,
     pub pieces: [u64; 12], //a bitboard for each piece
@@ -30,6 +31,9 @@ pub struct Board {
     pub attacked: [u64; 2],
     pub prev: Option<Rc<Board>>,
     pub prev_move: Move,
+
+    //TODO: Remove other stuff
+    pub state: Rc<BoardState>,
 }
 impl Board {
     //constructor
@@ -47,6 +51,8 @@ impl Board {
             attacked: [0; 2],
             prev: None,
             prev_move: Move::new(),
+            state: Rc::new(BoardState::new()),
+
         }
     }
     pub fn clone(&self) -> Board {
@@ -63,6 +69,7 @@ impl Board {
             attacked: self.attacked,
             prev: self.prev.as_ref().cloned(),  //i don't think I should clone this, I need to have a clone point to the same previous board state
             prev_move: self.prev_move,
+            state: Rc::clone(&self.state),
         }
     }
 
