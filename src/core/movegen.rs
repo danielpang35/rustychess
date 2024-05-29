@@ -254,8 +254,10 @@ impl MoveGenerator {
           attacks &= target.0 | target.1;
         }
         
-        if(self.pawnattacks[color as usize][ind as usize] & (1<<board.ep_square) != 0)
+        if(self.pawnattacks[color as usize][ind as usize] & (1<<board.ep_square) != 0) 
+        && (constlib::get_rank(ind as u8) != 2 || constlib::get_rank(ind as u8) != 7)
         {
+
           if evasions {
             let offset = if color == 0 {-8} else {8};
             if (1 << board.ep_square) & target.1 != 0{

@@ -90,7 +90,7 @@ impl Board {
         let to = bm.getDst();
         let piece = self.piecelocs.piece_at(from);
         println!("trying to move piece");
-        constlib::print_bitboard(self.pieces[PieceIndex::P.index()]);
+        constlib::print_bitboard(self.pieces[piece.getidx()]);
         assert!(piece != Piece::None);
         let boardcopy = self.clone();
         if castle {
@@ -186,7 +186,7 @@ impl Board {
         println!("Unmaking move....");
         let previous = self.prev.as_ref().unwrap().clone();
         let penult = previous.prev.clone();
-        let color = self.turn;
+        let color = previous.turn;
         let enemy = if color == 0 {1} else {0};
         let bm = self.prev_move;
         //disect previous move
@@ -199,7 +199,7 @@ impl Board {
         let from = bm.getSrc();
         let to = bm.getDst();
         let piece = previous.piecelocs.piece_at(from);
-
+        assert!(piece.get_color() == color);
         if castle {
             self.undo_castling(from as i8, to as i8);
         } else {
@@ -234,7 +234,7 @@ impl Board {
                 //restore occupied bitboard
                 
                 //put our piece back 
-                self.playerpieces[color as usize] ^= (1<<capsq);
+                self.playerpieces[enemy as usize] ^= (1<<capsq);
                 
                 //place the capturedpiece back where it was before being captured
                 self.piecelocs.place(capsq, capturedpiece);
@@ -242,7 +242,7 @@ impl Board {
             }
             
             //toggle our playerpieces bitboard
-            self.playerpieces[enemy as usize] ^= (1<<from) | (1<<to); 
+            self.playerpieces[color as usize] ^= (1<<from) | (1<<to); 
             
             
 
@@ -257,7 +257,7 @@ impl Board {
         self.castling_rights = previous.castling_rights;
         self.pinned = previous.pinned;
         self.attacked = previous.attacked;
-        self.turn = enemy;
+        self.turn = color;
         self.prev = penult;
         self.prev_move = previous.prev_move;
         //TODO: undo castling if any, unset ep square, restore pinned info from previous, restore attacked squares from previous

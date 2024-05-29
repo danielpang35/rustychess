@@ -63,6 +63,15 @@ pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64{
   ct
 }
 
+pub fn get_rank(square: u8) -> u8 {
+  // For a square in the range 0-63, divide by 8 and add 1 to get the rank (1-8)
+  (square / 8) + 1
+}
+fn get_file(square: u8) -> u8 {
+  // For a square in the range 0-63, divide by 8 and add 1 to get the rank (1-8)
+  (square % 8) + 1
+}
+
 pub fn dirShift(direction: i8, bitboard: u64) -> u64 {
   //perform a general bit shift in the specified direction
     return genShift(direction,bitboard);

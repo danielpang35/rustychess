@@ -63,8 +63,10 @@ impl Piece {
             return mem::transmute(bits)
         }
     }
-    pub fn get_color(self) -> bool {
-        return unsafe { mem::transmute((self as u8 >> 3) & 0b1) };
+    pub fn get_color(self) -> u8 {
+        return unsafe { 
+            let color = mem::transmute((self as u8 >> 3) & 0b1);
+            color };
 
         // if (self as u8) << 3 & 1 == 1 {
         //     return true;
@@ -78,7 +80,7 @@ impl Piece {
         }
         unsafe {
             let mut idx = self.get_piece_type() as usize - 1;
-            if self.get_color() {
+            if self.get_color() == 1{
                 //black piece
                 idx += 6;
             }
