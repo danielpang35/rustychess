@@ -35,7 +35,6 @@ pub fn oppressed(rights: u8) -> bool {
     rights == 0
 }
 pub fn wkingside(rights: u8) -> bool {
-    println!("RIGHTS:{}",rights);
     unsafe {
         if (rights & CastlingRights::WKingside as u8) != 0 {
             return true
@@ -45,7 +44,6 @@ pub fn wkingside(rights: u8) -> bool {
     }
 }
 pub fn wqueenside(rights: u8) -> bool {
-    println!("RIGHTS:{}",rights);
     unsafe {
         if (rights & CastlingRights::WQueenside as u8) != 0 {
             return true
@@ -55,7 +53,6 @@ pub fn wqueenside(rights: u8) -> bool {
     }
 }
 pub fn bkingside(rights: u8) -> bool {
-    println!("RIGHTS:{}",rights);
     unsafe {
         if (rights & CastlingRights::BKingside as u8) != 0 {
             return true
@@ -65,7 +62,6 @@ pub fn bkingside(rights: u8) -> bool {
     }
 }
 pub fn bqueenside(rights: u8) -> bool {
-    println!("RIGHTS:{}",rights);
     unsafe {
         if (rights & CastlingRights::BQueenside as u8) != 0 {
             return true

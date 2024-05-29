@@ -1,6 +1,6 @@
 use std::mem;
 #[repr(u8)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum PieceType {
     NONE = 0,
     P,
@@ -38,7 +38,7 @@ impl PieceType {
 }
 
 #[repr(u8)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Piece {
     None = 0b0000,
     WP = 0b0001,
@@ -73,6 +73,9 @@ impl Piece {
         // }
     }
     pub fn getidx(self) -> usize {
+        if self == Self::None {
+            panic!("Cannot get none pieceidx");
+        }
         unsafe {
             let mut idx = self.get_piece_type() as usize - 1;
             if self.get_color() {

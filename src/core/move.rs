@@ -91,11 +91,25 @@ impl Move {
     pub fn makeCapture(src:u8,dst:u8) -> Move {
       Move::make(src,dst, Move::FLAG_CAPTURE)
     }
-    pub fn makePromCap(src:u8, dst:u8) -> Move {
-      Move::make(src, dst,Move::FLAG_PROMO_CAP_Q)
+    pub fn makePromCap(src:u8, dst:u8, piece:PieceType) -> Move {
+      let flag = match piece {
+        PieceType::N => Move::FLAG_PROMO_CAP_N,
+        PieceType::B => Move::FLAG_PROMO_CAP_B,
+        PieceType::R => Move::FLAG_PROMO_CAP_R,
+        PieceType::Q => Move::FLAG_PROMO_CAP_Q,
+        _ => panic!("Invalid promotion type")
+      };
+      Move::make(src, dst,flag)
     }
-    pub fn makeProm(src:u8, dst:u8) -> Move {
-      Move::make(src, dst,Move::FLAG_PROMO_Q)
+    pub fn makeProm(src:u8, dst:u8, piece: PieceType) -> Move {
+      let flag = match piece {
+        PieceType::N => Move::FLAG_PROMO_N,
+        PieceType::B => Move::FLAG_PROMO_B,
+        PieceType::R => Move::FLAG_PROMO_R,
+        PieceType::Q => Move::FLAG_PROMO_Q,
+        _ => panic!("Invalid promotion type")
+      };
+      Move::make(src, dst,flag)
     }
     pub fn makeEP(src:u8, dst:u8) -> Move {
       Move::make(src,dst,Move::FLAG_EP)
@@ -106,7 +120,9 @@ impl Move {
     pub fn makeQueenCastle(src:u8, dst:u8) -> Move {
       Move::make(src, dst, Move::FLAG_QUEEN_CASTLE)
     }
-    
+    pub fn data(self) -> u16 {
+      return self.data;
+    }
     pub fn flag(self) -> u16 {
       //return flag bits of self
       return (self.data & FLAG_MASK) >> 12
@@ -143,7 +159,7 @@ impl Move {
       self.flag() == 0
     }
     pub fn prompiece(&self) -> PieceType {
-        let bits = (self.data & SP_MASK) + 1;
+        let bits = (self.flag() & 0b0011);
         match bits {
             0 => PieceType::N,
             1 => PieceType::B,

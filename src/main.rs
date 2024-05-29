@@ -1,6 +1,7 @@
 #[allow(dead_code)]
 #[allow(nonstandard_style)]
 mod core;
+use core::constlib;
 use std::env;
 
 fn main() {
@@ -9,21 +10,33 @@ fn main() {
 
     let mut board = core::Board::new();
     let s = String::new();
-    //board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
-    //
-    board.from_fen(String::from("4k3/8/5p2/3b4/4N3/8/8/1K1R4 w - - 0 1
-    "));
+    board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+    
+    // board.from_fen(String::from("k5r1/3P1P2/8/8/8/8/8/3K4 b - - 0 1"));
     let mg = core::movegen::MoveGenerator::new();
-    let ml = mg.generate(&board);
-    println!("{}",board.toStr());
-
-    println!("Movelist length: {}", ml.len());
-    let m = ml[7];
-    for bm in ml {
-        bm.print();
+    
+    println!("Running perft....");
+    for i in 0..6 {
+        let res = constlib::perft(&mut board,i,&mg);
+        println!("Perft: depth = {}, result = {}",i, res);
     }
-    board.push(m);
-    board.pop();
+    // let ml = mg.generate(&board);
+    // let mlc = ml.clone();
+    // for bm in ml {
+    //     bm.print();
+    // }
+    // board.push(mlc[1]);
+    // let ml = mg.generate(&board);
+    // println!("{}",ml.len());
+    // let mlc = ml.clone();
+
+    // for bm in ml {
+    //     bm.print();
+    // } 
+    // board.push(mlc[17]);
+
+    // board.pop();
+    // board.pop();
     println!("{}",board.toStr());
 
 }

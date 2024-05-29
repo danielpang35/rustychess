@@ -1,3 +1,5 @@
+pub use crate::core::movegen::MoveGenerator;
+pub use crate::core::Board;
 /// Direction of going north on a chessboard.
 pub const north: i8 = 8;
 /// Direction of going south on a chessboard.
@@ -46,6 +48,20 @@ pub const filesmasks: [u64; 8] = initFileMaskLookup();
 pub const notAFile:u64 = 0xfefefefefefefefe; // ~0x0101010101010101
 pub const notHFile:u64 = 0x7f7f7f7f7f7f7f7f; // ~0x8080808080808080
 
+pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64{
+  let ml = mg.generate(board);
+  let mut ct = 0;
+  if depth == 0 {
+      return 1
+  }
+  for bm in ml {
+      board.push(bm);
+      ct += perft(board, depth - 1, mg);
+      board.pop();
+  }
+  println!("Depth: {}", depth);
+  ct
+}
 
 pub fn dirShift(direction: i8, bitboard: u64) -> u64 {
   //perform a general bit shift in the specified direction
@@ -64,7 +80,9 @@ pub fn poplsb(bitboard: &mut u64) -> u8
     //returns number of zeros to lsb
     //sets lsb to 0
     let zeros = bitboard.trailing_zeros();
-    *bitboard &= *bitboard - 1;
+    if(*bitboard != 0) {
+      *bitboard &= *bitboard - 1;
+    }
     zeros as u8
   }
 
