@@ -69,9 +69,8 @@ impl Board {
     pub fn push(&mut self, bm:Move) {
         let color = self.turn;
         let enemy = if color == 0 {1} else {0};
-        
+        bm.print();
         //push a move to the board
-
 
         //unpack move
         let quiet = bm.isquiet();
@@ -84,6 +83,7 @@ impl Board {
         let to = bm.getDst();
         let piece = self.piecelocs.piece_at(from);
         assert!(piece != Piece::None);
+        //TODO: refactor this: just pass around a board state reference
         let boardcopy = self.clone();
         if castle {
             //get side of castling
@@ -110,6 +110,9 @@ impl Board {
                 // constlib::print_bitboard(self.pieces[capturedidx]);
                 //also remove enemy piece from enemy playerpiece bitboard
                 self.playerpieces[enemy as usize] ^= (1<<capsq);
+                
+                //if a piece was captured, also toggle the to square for occupied bitboard
+                self.occupied ^= (1<<to);
             }
             
             //toggle our playerpieces bitboard
@@ -119,7 +122,6 @@ impl Board {
             //update piecelocations
             self.piecelocs.place(to, piece);
             self.piecelocs.remove(from);
-
             //update ep
             if piece.get_piece_type() == PieceType::P
             {           
@@ -199,6 +201,7 @@ impl Board {
             //remove from dest square, place back at from square
             self.piecelocs.remove(to);
             self.piecelocs.place(from, piece);
+            
 
             //restore moved piece bitboard by toggling from and to squares
             let pieceidx = piece.getidx();
@@ -219,15 +222,23 @@ impl Board {
 
                 //restore occupied bitboard
                 
-                //put our piece back 
+                //put captured piece back 
                 self.playerpieces[enemy as usize] ^= (1<<capsq);
                 
                 //place the capturedpiece back where it was before being captured
                 self.piecelocs.place(capsq, capturedpiece);
+                self.occupied ^= (1<<to);
             }
             
-            //toggle our playerpieces bitboard
+            //put moved piece back
             self.playerpieces[color as usize] ^= (1<<from) | (1<<to); 
+            // println!("Final friendly playerpieces after unmaking move");
+            // constlib::print_bitboard(self.playerpieces[color as usize]);
+            // println!("Final enemy playerpieces after unmaking move");
+            // constlib::print_bitboard(self.playerpieces[enemy as usize]);
+            // println!("Final moved piece bitboard after unmaking move");
+            // constlib::print_bitboard(self.pieces[pieceidx]);
+            // constlib::print_bitboard(self.pieces[PieceIndex::p.index()]);
         }
         //update castling rights
         // self.pieces = previous.pieces;
@@ -242,10 +253,7 @@ impl Board {
         self.prev = penult;
         self.prev_move = previous.prev_move;
         //TODO: undo castling if any, unset ep square, restore pinned info from previous, restore attacked squares from previous
-        // println!("Final friendly playerpieces after unmaking move");
-        // constlib::print_bitboard(self.playerpieces[color as usize]);
-        // println!("Final enemy playerpieces after unmaking move");
-        // constlib::print_bitboard(self.playerpieces[enemy as usize]);
+        
         //need to check if the squares interacted with last turn are a king square or rook square
         //TODO: update turn, 
 
@@ -410,7 +418,6 @@ impl Board {
         self.piecelocs.place(ind as u8, Piece::make(color as u8, piece));
       
     }
-
     
     //returns string of board
     pub fn toStr(&self) -> String {
