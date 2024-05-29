@@ -1,3 +1,4 @@
+
 pub use crate::core::movegen::MoveGenerator;
 pub use crate::core::Board;
 /// Direction of going north on a chessboard.
@@ -59,7 +60,6 @@ pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64{
       ct += perft(board, depth - 1, mg);
       board.pop();
   }
-  println!("Depth: {}", depth);
   ct
 }
 
@@ -111,7 +111,6 @@ pub fn print_bitboard(bitboard: u64) {
 }
 pub fn square_from_string(square_str:&str) -> u8 {
   let mut square_value: u8 = 64; // Initialize with an invalid value
-
   if square_str.len() == 2 {
       let file = square_str.chars().next().unwrap();
       let rank = square_str.chars().nth(1).unwrap();

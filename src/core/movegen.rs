@@ -34,7 +34,7 @@ impl MoveGenerator {
         moveg.gen_line_bbs();
         moveg
     }
-  
+    #[inline(always)]
     pub fn generate(&self, board: &Board)->Vec<Move>
       {
         let mut moves = Vec::new();
@@ -53,7 +53,7 @@ impl MoveGenerator {
         self.generatekingmoves(board,&mut moves);
         moves
       }
-    
+    #[inline(always)]
     pub fn generatekingmoves(&self,board:&Board,movelist:&mut Vec<Move>) {
       let color = board.turn;
       let mut kbb = if (color == 0) {board.pieces[PieceIndex::K.index()]} else {board.pieces[PieceIndex::k.index()]};
@@ -74,6 +74,7 @@ impl MoveGenerator {
       }
       self.generatecastling(board, movelist);
     }
+    #[inline(always)]
     pub fn generatequeenmoves(&self, board:&Board, movelist:&mut Vec<Move>,evasions:bool,target:(u64,u64)) {
       let color = board.turn;
       let mut qbb = if (color == 0) {board.pieces[PieceIndex::Q.index()]} else {board.pieces[PieceIndex::q.index()]};
@@ -101,6 +102,7 @@ impl MoveGenerator {
         }
       }
     }
+    #[inline(always)]
     pub fn generaterookmoves(&self, board:&Board, movelist:&mut Vec<Move>,evasions:bool,target:(u64,u64)) {
       let color = board.turn;
       let mut rbb = if (color == 0) {board.pieces[PieceIndex::R.index()]} else {board.pieces[PieceIndex::r.index()]};
@@ -123,13 +125,12 @@ impl MoveGenerator {
         while attacks != 0 {
           let dst = constlib::poplsb(&mut attacks);
           if (1 << dst) & board.playerpieces[them] != 0 {
-            println!("Found a capture for the rook:");
-            constlib::print_bitboard(board.playerpieces[them]);
             movelist.push(Move::makeCapture(ind,dst));
           } else {movelist.push(Move::makeQuiet(ind,dst));}
         }
       }
     }
+    #[inline(always)]
     pub fn generatebishopmoves(&self, board:&Board, movelist:&mut Vec<Move>,evasions:bool,target:(u64,u64)) {
       let color = board.turn;
       let mut bbb = if (color == 0) {board.pieces[PieceIndex::B.index()]} else {board.pieces[PieceIndex::b.index()]};
@@ -158,6 +159,7 @@ impl MoveGenerator {
         }
       }
     }
+    #[inline(always)]
     pub fn generateknightmoves(&self,board: &Board, movelist: &mut Vec<Move>,evasions:bool,target:(u64,u64)) {
       let color = board.turn;
       let enemy = if color == 0 {1} else {0};
@@ -173,7 +175,6 @@ impl MoveGenerator {
         attacks &= !board.playerpieces[color as usize];
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
-          println!("king is in check, generate evasions");
           attacks &= target.0 | target.1;
         }
         while attacks != 0 {
@@ -185,14 +186,14 @@ impl MoveGenerator {
       }
       
     }
+    #[inline(always)]
     pub fn generatepawnmoves(&self,board: &Board, movelist: &mut Vec<Move>,evasions:bool,target:(u64,u64)) {
       //looks up pawn attacks and moves, finds out if they're possible
       //creates a bitmove for each possible move
       //mutates given array
       let color = board.turn;
       let mut pbb = if color == 0 {board.pieces[PieceIndex::P.index()]} else {board.pieces[PieceIndex::p.index()]};
-      constlib::print_bitboard(pbb);
-      println!("making pawn moves for {}",if color == 0 {"WHITE"} else {"BLACK"});
+      //println!("making pawn moves for {}",if color == 0 {"WHITE"} else {"BLACK"});
       while pbb != 0 {
         let ind = pbb.trailing_zeros();
         //get pawn moves and attacks at square
@@ -255,9 +256,8 @@ impl MoveGenerator {
         }
         
         if(self.pawnattacks[color as usize][ind as usize] & (1<<board.ep_square) != 0) 
-        && (constlib::get_rank(ind as u8) != 2 || constlib::get_rank(ind as u8) != 7)
+        && (constlib::get_rank(ind as u8) != 2) && (constlib::get_rank(ind as u8) != 7)
         {
-
           if evasions {
             let offset = if color == 0 {-8} else {8};
             if (1 << board.ep_square) & target.1 != 0{
@@ -374,6 +374,7 @@ impl MoveGenerator {
           self.knight[i] = attacks;
         }
       }
+    #[inline(always)]
     pub fn compute_bishop(&self,sq:i8,blockers:u64) -> u64{
       
       let mut attacks = 0;
@@ -409,7 +410,7 @@ impl MoveGenerator {
       return attacks
     }
 
-    
+    #[inline(always)]
     pub fn compute_rook(&self, sq:i8, blockers:u64)->u64{
       let mut attacks = 0;
       let mut currpos: i8;
@@ -436,7 +437,7 @@ impl MoveGenerator {
       attacks
         
     }
-
+    #[inline(always)]
     pub fn generatecastling(&self, board:&Board, movelist: &mut Vec<Move>){
       //generate castling moves
       let color = board.turn;
@@ -483,6 +484,7 @@ impl MoveGenerator {
       }
       
     }
+    #[inline(always)]
     pub fn makeattackedmask(&self, board:&Board, blockers:u64) -> u64 {
       let color = board.turn;
       let enemy = if color == 0 {1} else {0};
@@ -496,6 +498,10 @@ impl MoveGenerator {
       while pbb != 0 {
         let ind = constlib::poplsb(&mut pbb);
         attacks |= self.pawnattacks[enemy][ind as usize];
+      }
+      while kbb != 0 {
+        let ind = constlib::poplsb(&mut kbb);
+        attacks |= self.king[ind as usize];
       }
       while nbb != 0 {
         let ind = constlib::poplsb(&mut nbb);
@@ -517,6 +523,7 @@ impl MoveGenerator {
       
       attacks
     }
+    #[inline(always)]
     pub fn getkingdangermask(&self, board:&Board) -> u64 {
       let color = board.turn;
       let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
@@ -526,7 +533,7 @@ impl MoveGenerator {
       kingdanger |= self.makeattackedmask(board, blockers);
       kingdanger
     }
-
+    #[inline(always)]
     pub fn getcheckers(&self, board:&Board, blockers: u64) -> u64 {
       let color = board.turn;
       let enemy = if color == 0 {1} else {0};
@@ -549,6 +556,7 @@ impl MoveGenerator {
                 |  ((batt | ratt) & qbb);
       attackers
     }
+    #[inline(always)]
     pub fn getpinned(&self, board:&Board) -> (u64,u64){
       let color = board.turn;
       let enemy = if color == 0 {1} else {0};
@@ -607,6 +615,7 @@ impl MoveGenerator {
 
     //   }
     // }
+    #[inline(always)]
     pub fn genevasions(&self, board:&Board, movelist: &mut Vec<Move>, checkers: &mut u64) {
       let mut kingbb = if board.turn == 0 {board.pieces[PieceIndex::K.index()]} else {board.pieces[PieceIndex::k.index()]};
       let kingsq = constlib::poplsb(&mut kingbb);
@@ -628,7 +637,6 @@ impl MoveGenerator {
         let capture_mask = checkerscopy;
         let checkersq = constlib::poplsb(&mut checkerscopy);
         let piecetype = board.piecelocs.piece_at(checkersq as u8).get_piece_type();
-        println!("Checker: {}, king: {}", constlib::squaretouci(checkersq),constlib::squaretouci(kingsq));
         let block_mask = match piecetype {
           //get the squares that a piece can move to to block check
           PieceType::R | PieceType::Q | PieceType::B => Self::get_ray_mask(checkersq as i8,kingsq as i8),
@@ -642,9 +650,8 @@ impl MoveGenerator {
         self.generaterookmoves(board,movelist, true, (capture_mask,block_mask));
         self.generatequeenmoves(board,movelist, true, (capture_mask,block_mask));
       }
-      println!("ct{}",ct);
     }
-    
+    #[inline(always)]
     fn get_ray_mask(source_square: i8, target_square: i8) -> u64 {
       let mut ray_mask = 0;
       let mut square = source_square as i8;
@@ -676,6 +683,7 @@ impl MoveGenerator {
       }
       ray_mask
   }
+  #[inline(always)]
   fn get_ray_mask_blockers(source_square: i8, target_square: i8, blockers: u64) -> u64 {
     let mut ray_mask = 0;
     let mut square = source_square as i8;
@@ -735,7 +743,7 @@ impl MoveGenerator {
         
     //   }
     // }
-
+    #[inline(always)]
     pub fn gen_line_bbs(&mut self) {
       for i in 0..64_i8 {
           for j in 0..64_i8 {

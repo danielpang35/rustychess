@@ -13,6 +13,8 @@ pub use castling::CastlingRights;
 
 pub use std::rc::Rc;
 
+
+
 //a struct defining the physical aspects of the board
 #[derive(Clone)]
 pub struct Board {
@@ -65,17 +67,9 @@ impl Board {
     }
 
     pub fn push(&mut self, bm:Move) {
-        println!("Pushing move to board");
-        println!("Turn is {}",self.turn);
-        
-        bm.print();
         let color = self.turn;
         let enemy = if color == 0 {1} else {0};
         
-        println!("{}", self.toStr());
-        // constlib::print_bitboard(self.playerpieces[color as usize]);                
-        // constlib::print_bitboard(self.playerpieces[enemy as usize]);        
-        // constlib::print_bitboard(self.occupied);
         //push a move to the board
 
 
@@ -89,8 +83,6 @@ impl Board {
         let from = bm.getSrc();
         let to = bm.getDst();
         let piece = self.piecelocs.piece_at(from);
-        println!("trying to move piece");
-        constlib::print_bitboard(self.pieces[piece.getidx()]);
         assert!(piece != Piece::None);
         let boardcopy = self.clone();
         if castle {
@@ -100,14 +92,10 @@ impl Board {
             //update occupied bitboard
             self.occupied ^= (1 << from) | (1<<to);
             //update piece bitboards
-            println!("Piece bitboard before: ");
-            constlib::print_bitboard(self.pieces[piece.getidx()]);
             let pieceidx = piece.getidx();
             
             self.pieces[pieceidx] ^= (1<<from);
             self.pieces[pieceidx] |= (1<<to);
-            println!("Piece bitboard ffteer: ");
-            constlib::print_bitboard(self.pieces[piece.getidx()]);
             if capture {
                 let capturedidx = if ep {6*enemy+PieceIndex::P.index()}
                     else {self.piecelocs.piece_at(to).getidx()};
@@ -115,6 +103,7 @@ impl Board {
                 if ep {
                     capsq = if color == 0 {to - 8} else {to + 8};
                     self.occupied ^= (1<<capsq);
+                    self.piecelocs.remove(capsq);
                 }
                 //if a piece was captured, toggle the bit that it was on on its bitboard
                 self.pieces[capturedidx] ^= (1<<capsq);
@@ -142,15 +131,13 @@ impl Board {
                 }
                 if prom {
                     let prompiece = bm.prompiece();
-                    println!("PROMOTION PIECE:{}", prompiece.get_piece_type());
                     let prompiece = prompiece.to_piece(color);
                     let promidx = prompiece.getidx();
                     self.pieces[promidx] ^= (1<<to);
                     self.piecelocs.place(to,prompiece );
                 }
             } 
-            
-            
+
            
         } 
         
@@ -183,7 +170,6 @@ impl Board {
     }
 
     pub fn pop(&mut self) {
-        println!("Unmaking move....");
         let previous = self.prev.as_ref().unwrap().clone();
         let penult = previous.prev.clone();
         let color = previous.turn;
@@ -218,14 +204,14 @@ impl Board {
             let pieceidx = piece.getidx();
             self.pieces[pieceidx] |= (1<<from);
             self.pieces[pieceidx] ^= (1<<to);
-            
+            assert!(piece.get_color() == color);
             if capture {
                 //get captured piece and put it back on the square it was captured on
                 let mut capturedpiece = previous.piecelocs.piece_at(to);
                 let mut capsq = to;
                 if ep {
                     capturedpiece = if color == 0 {Piece::BP} else {Piece::WP};
-                    capsq = if color == 0 {to + 8} else {to - 8};
+                    capsq = if color == 0 {to - 8} else {to + 8};
                     self.occupied ^= (1<<capsq);
                 }
                 let capturedidx = capturedpiece.getidx();
@@ -238,15 +224,10 @@ impl Board {
                 
                 //place the capturedpiece back where it was before being captured
                 self.piecelocs.place(capsq, capturedpiece);
-                
             }
             
             //toggle our playerpieces bitboard
             self.playerpieces[color as usize] ^= (1<<from) | (1<<to); 
-            
-            
-
-            
         }
         //update castling rights
         // self.pieces = previous.pieces;
