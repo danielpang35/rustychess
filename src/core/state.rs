@@ -30,4 +30,6 @@ impl BoardState {
             prev_move: Move::new(),  
         }
     }
+    
 }
+

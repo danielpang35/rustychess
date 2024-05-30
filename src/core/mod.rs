@@ -76,7 +76,6 @@ impl Board {
     pub fn push(&mut self, bm:Move) {
         let color = self.turn;
         let enemy = if color == 0 {1} else {0};
-        bm.print();
         //push a move to the board
 
         //unpack move

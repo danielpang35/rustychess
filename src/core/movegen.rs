@@ -81,7 +81,7 @@ impl MoveGenerator {
       let them = if color == 0 {1} else {0};
       while qbb != 0 {
         let ind = constlib::poplsb(&mut qbb);
-        let mut attacks = self.compute_rook(ind as i8,board.occupied) | self.compute_bishop(ind as i8, board.occupied);
+        let mut attacks = constlib::compute_rook(ind as i8,board.occupied) | constlib::compute_bishop(ind as i8, board.occupied);
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
         if board.pinned[color as usize] & (1 << ind) != 0 {
@@ -109,7 +109,7 @@ impl MoveGenerator {
       let them = if color == 0 {1} else {0};
       while rbb != 0 {
         let ind = constlib::poplsb(&mut rbb);
-        let mut attacks = self.compute_rook(ind as i8,board.occupied);
+        let mut attacks = constlib::compute_rook(ind as i8,board.occupied);
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
         if board.pinned[color as usize] & (1 << ind) != 0 {
@@ -138,7 +138,7 @@ impl MoveGenerator {
       
       while bbb != 0 {
         let ind = constlib::poplsb(&mut bbb);
-        let mut attacks = self.compute_bishop(ind as i8,board.occupied);
+        let mut attacks = constlib::compute_bishop(ind as i8,board.occupied);
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
         if board.pinned[color as usize] & (1 << ind) != 0 {
@@ -374,69 +374,8 @@ impl MoveGenerator {
           self.knight[i] = attacks;
         }
       }
-    #[inline(always)]
-    pub fn compute_bishop(&self,sq:i8,blockers:u64) -> u64{
-      
-      let mut attacks = 0;
-      //current square
-      let mut currpos: i8;
-      for diag in 0..4{
-        //start pos
-        currpos = sq;
-        loop {
-          //get diagonal direction.
-          match diag {
-            //for up right, check if wrapped around to a file. if so, break
-            0=> {currpos += constlib::northeast;
-                if currpos >= 64 || currpos % 8 <= 0 {break;}},
-            //for up left, check if wrapped around to h file. if so break
-            1=> {currpos += constlib::northwest;
-              if currpos >= 64 || currpos % 8 >= 7 {break;}},
-            2=> {currpos += constlib::southwest;
-              if currpos < 0 || currpos % 8 >= 7 {break;}},
-            3=> {currpos += constlib::southeast;
-              if currpos < 0 || currpos % 8 <=0 {break;}},
-            _ => panic!(),
-          }
-          attacks |= constlib::genShift(currpos, 1 as u64);
-          if constlib::genShift(currpos, 1 as u64) & blockers != 0 {
-            break;
-          }
-          //set the current position as a potential attack
-          
-          
-        }
-      }
-      return attacks
-    }
-
-    #[inline(always)]
-    pub fn compute_rook(&self, sq:i8, blockers:u64)->u64{
-      let mut attacks = 0;
-      let mut currpos: i8;
-      for ortho in 0..4 {
-        currpos = sq;
-        loop {
-          match ortho {
-            //for up, check if greater than 64. if so, break
-            0=> {currpos += constlib::north;
-              if currpos >= 64 {break;}},
-            //for left, check if wrapped around to h file. if so break
-            1=> {currpos += constlib::west;
-              if currpos < 0 || currpos % 8 >= 7 {break;}},
-            2=> {currpos += constlib::south;
-              if currpos < 0 {break;}},
-            3=> {currpos += constlib::east;
-              if currpos % 8 <=0 {break;}},
-            _ => panic!(),
-          }
-          attacks |= constlib::genShift(currpos, 1 as u64);
-          if constlib::genShift(currpos, 1 as u64) & blockers != 0 {break;}
-        }
-      }
-      attacks
-        
-    }
+    
+    
     #[inline(always)]
     pub fn generatecastling(&self, board:&Board, movelist: &mut Vec<Move>){
       //generate castling moves
@@ -509,15 +448,15 @@ impl MoveGenerator {
       }
       while bbb != 0 {
         let ind = constlib::poplsb(&mut bbb);
-        attacks |= self.compute_bishop(ind as i8, blockers);
+        attacks |= constlib::compute_bishop(ind as i8, blockers);
       }
       while rbb != 0 {
         let ind = constlib::poplsb(&mut rbb);
-        attacks |= self.compute_rook(ind as i8, blockers);
+        attacks |= constlib::compute_rook(ind as i8, blockers);
       }
       while qbb != 0 {
         let ind = constlib::poplsb(&mut qbb);
-        let qatt = self.compute_bishop(ind as i8, blockers) | self.compute_rook(ind as i8, blockers);
+        let qatt = constlib::compute_bishop(ind as i8, blockers) | constlib::compute_rook(ind as i8, blockers);
         attacks |= qatt
       }
       
@@ -533,6 +472,8 @@ impl MoveGenerator {
       kingdanger |= self.makeattackedmask(board, blockers);
       kingdanger
     }
+
+    
     #[inline(always)]
     pub fn getcheckers(&self, board:&Board, blockers: u64) -> u64 {
       let color = board.turn;
@@ -547,8 +488,8 @@ impl MoveGenerator {
       let rbb = board.pieces[(6*enemy+PieceIndex::R.index())];
       let qbb = board.pieces[(6*enemy+PieceIndex::Q.index())];
 
-      let batt = self.compute_bishop(kingsq, blockers);
-      let ratt = self.compute_rook(kingsq, blockers);
+      let batt = constlib::compute_bishop(kingsq, blockers);
+      let ratt = constlib::compute_rook(kingsq, blockers);
       attackers |= (self.pawnattacks[color as usize][kingsq as usize] & pbb)
                 |  (self.knight[kingsq as usize] & nbb) 
                 |  (batt & bbb)
@@ -566,7 +507,7 @@ impl MoveGenerator {
       //get square of king
       let blockers = board.occupied;
       //get all possible squares that a pinned piece could be along
-      let pinnablemask = self.compute_bishop(kingsq, blockers) | self.compute_rook(kingsq, blockers);
+      let pinnablemask = constlib::compute_bishop(kingsq, blockers) | constlib::compute_rook(kingsq, blockers);
       //get all sliding attacks of enemy.
       let mut bbb = board.pieces[(6*enemy+PieceIndex::B.index())];
       let mut rbb = board.pieces[(6*enemy+PieceIndex::R.index())];
@@ -749,12 +690,12 @@ impl MoveGenerator {
           for j in 0..64_i8 {
               let i_bb: u64 = 1_u64 << i;
               let j_bb: u64 = 1_u64 << j;
-              if self.compute_rook(i, 0) & j_bb != 0 {
+              if constlib::compute_rook(i, 0) & j_bb != 0 {
                   self.line_between[i as usize][j as usize] |=
-                      (self.compute_rook(j,0) & self.compute_rook(i,0)) | i_bb | j_bb;
-              } else if self.compute_bishop(i, 0) & j_bb != 0 {
+                      (constlib::compute_rook(j,0) & constlib::compute_rook(i,0)) | i_bb | j_bb;
+              } else if constlib::compute_bishop(i, 0) & j_bb != 0 {
                   self.line_between[i as usize][j as usize] |=
-                      (self.compute_bishop(j,0) & self.compute_bishop(i,0)) | i_bb | j_bb;
+                      (constlib::compute_bishop(j,0) & constlib::compute_bishop(i,0)) | i_bb | j_bb;
               } else {
                   self.line_between[i as usize][j as usize] = 0;
               }

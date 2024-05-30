@@ -193,3 +193,66 @@ pub fn squaretouci(square: u8) -> String {
   format!("{}{}", file as char, rank as char)
 }
 
+
+pub fn compute_bishop(sq:i8,blockers:u64) -> u64{
+      
+  let mut attacks = 0;
+  //current square
+  let mut currpos: i8;
+  for diag in 0..4{
+    //start pos
+    currpos = sq;
+    loop {
+      //get diagonal direction.
+      match diag {
+        //for up right, check if wrapped around to a file. if so, break
+        0=> {currpos += northeast;
+            if currpos >= 64 || currpos % 8 <= 0 {break;}},
+        //for up left, check if wrapped around to h file. if so break
+        1=> {currpos += northwest;
+          if currpos >= 64 || currpos % 8 >= 7 {break;}},
+        2=> {currpos += southwest;
+          if currpos < 0 || currpos % 8 >= 7 {break;}},
+        3=> {currpos += southeast;
+          if currpos < 0 || currpos % 8 <=0 {break;}},
+        _ => panic!(),
+      }
+      attacks |= genShift(currpos, 1 as u64);
+      if genShift(currpos, 1 as u64) & blockers != 0 {
+        break;
+      }
+      //set the current position as a potential attack
+      
+      
+    }
+  }
+  return attacks
+}
+
+#[inline(always)]
+pub fn compute_rook(sq:i8, blockers:u64)->u64{
+  let mut attacks = 0;
+  let mut currpos: i8;
+  for ortho in 0..4 {
+    currpos = sq;
+    loop {
+      match ortho {
+        //for up, check if greater than 64. if so, break
+        0=> {currpos += north;
+          if currpos >= 64 {break;}},
+        //for left, check if wrapped around to h file. if so break
+        1=> {currpos += west;
+          if currpos < 0 || currpos % 8 >= 7 {break;}},
+        2=> {currpos += south;
+          if currpos < 0 {break;}},
+        3=> {currpos += east;
+          if currpos % 8 <=0 {break;}},
+        _ => panic!(),
+      }
+      attacks |= genShift(currpos, 1 as u64);
+      if genShift(currpos, 1 as u64) & blockers != 0 {break;}
+    }
+  }
+  attacks
+    
+}
