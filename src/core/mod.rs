@@ -23,16 +23,7 @@ pub struct Board {
     pub pieces: [u64; 12], //a bitboard for each piece
     pub playerpieces: [u64; 2],
     pub turn: u8,
-    pub castling_rights: u8,
-    pub ep_square: u8,
     pub piecelocs: PieceLocations,
-    pub pinned: [u64; 2], //friendly pieces
-    pub pinners: [u64; 2], //enemy pieces
-    pub attacked: [u64; 2],
-    pub prev: Option<Rc<Board>>,
-    pub prev_move: Move,
-
-    //TODO: Remove other stuff
     pub state: Rc<BoardState>,
 }
 impl Board {
@@ -43,14 +34,7 @@ impl Board {
             pieces: [0; 12],
             playerpieces: [0; 2],
             turn: 0,
-            castling_rights: 0,
-            ep_square: 0,
             piecelocs: PieceLocations::new(),
-            pinned: [0; 2],
-            pinners: [0; 2],
-            attacked: [0; 2],
-            prev: None,
-            prev_move: Move::new(),
             state: Rc::new(BoardState::new()),
 
         }
@@ -61,23 +45,17 @@ impl Board {
             pieces: self.pieces,
             playerpieces: self.playerpieces,
             turn: self.turn,
-            castling_rights: self.castling_rights,
-            ep_square: self.ep_square,
             piecelocs: self.piecelocs,
-            pinned: self.pinned,
-            pinners: self.pinned,
-            attacked: self.attacked,
-            prev: self.prev.as_ref().cloned(),  //i don't think I should clone this, I need to have a clone point to the same previous board state
-            prev_move: self.prev_move,
             state: Rc::clone(&self.state),
         }
     }
 
     pub fn push(&mut self, bm:Move) {
+        
         let color = self.turn;
         let enemy = if color == 0 {1} else {0};
         //push a move to the board
-
+        // println!("{}",if self.turn == 0 {"WHITE"} else {"BLACK"});
         //unpack move
         let quiet = bm.isquiet();
         let ep = bm.isep();
@@ -88,43 +66,49 @@ impl Board {
         let from = bm.getSrc();
         let to = bm.getDst();
         let piece = self.piecelocs.piece_at(from);
+        
         assert!(piece != Piece::None);
         //TODO: refactor this: just pass around a board state reference
-        let boardcopy = self.clone();
+        let statecopy = (*self.state).clone();
+        let mut newstate = BoardState::new();
         if castle {
             //get side of castling
             self.apply_castling(from as i8, to as i8);
         } else {
             //update occupied bitboard
-            self.occupied ^= (1 << from) | (1<<to);
+            
+            self.occupied ^= (1 << from);
+            self.occupied |= (1<<to);
             //update piece bitboards
             let pieceidx = piece.getidx();
             
             self.pieces[pieceidx] ^= (1<<from);
             self.pieces[pieceidx] |= (1<<to);
+            
             if capture {
+                let capturedpiece = self.piecelocs.piece_at(to);
                 let capturedidx = if ep {6*enemy+PieceIndex::P.index()}
-                    else {self.piecelocs.piece_at(to).getidx()};
+                    else {capturedpiece.getidx()};
                 let mut capsq = to;
                 if ep {
                     capsq = if color == 0 {to - 8} else {to + 8};
                     self.occupied ^= (1<<capsq);
-                    self.piecelocs.remove(capsq);
+                    
                 }
+                
                 //if a piece was captured, toggle the bit that it was on on its bitboard
                 self.pieces[capturedidx] ^= (1<<capsq);
-                // constlib::print_bitboard(self.pieces[capturedidx]);
+                
                 //also remove enemy piece from enemy playerpiece bitboard
                 self.playerpieces[enemy as usize] ^= (1<<capsq);
                 
                 //if a piece was captured, also toggle the to square for occupied bitboard
-                self.occupied ^= (1<<to);
+                newstate.capturedpiece = capturedpiece.get_piece_type();
             }
             
             //toggle our playerpieces bitboard
             self.playerpieces[color as usize] ^= (1<<from) | (1<<to); 
-           
-
+            
             //update piecelocations
             self.piecelocs.place(to, piece);
             self.piecelocs.remove(from);
@@ -132,10 +116,10 @@ impl Board {
             if piece.get_piece_type() == PieceType::P
             {           
                 if dbpush {
-                    self.ep_square = if self.turn == 0 {to - 8} else {to + 8};
+                    newstate.ep_square = if self.turn == 0 {to - 8} else {to + 8};
                     // constlib::print_bitboard(constlib::squaretobb(self.ep_square));
                 } else {
-                    self.ep_square = 0;
+                    newstate.ep_square = 0;
                 }
                 if prom {
                     let prompiece = bm.prompiece();
@@ -145,15 +129,16 @@ impl Board {
                     self.piecelocs.place(to,prompiece );
                 }
             } 
-
-           
+            // constlib::print_bitboard(self.pieces[pieceidx]);
+            // constlib::print_bitboard(self.occupied);
+            // self.print();
         } 
         
         //stupidity check
         assert!(from != to);
         //update occupied, pieces, playerpieces, change turn, update castling rights, update ep square, update piecelocs
 
-        if !castling::oppressed(self.castling_rights) {
+        if !castling::oppressed(self.state.castling_rights) {
             //if there are still castling rights
             //if a rook or king's starting square is the starting square or ending square of a move,
             //remove that side from the castling rights
@@ -161,42 +146,58 @@ impl Board {
             // println!("queenside castle was:{}", castling::wqueenside(self.castling_rights));
 
             // println!("Updating castle mask with : {}", format!("{updatecastlemask:b}"));
-            self.castling_rights &= updatecastlemask;
+            newstate.castling_rights &= updatecastlemask;
         }
         //update pininfo and attacked squares
         //also yea... you need to refactor this ugly ass code...
         let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
-        self.pinned[color as usize] = pininfo.0;
-        self.pinners[color as usize] = pininfo.1;
-        self.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
 
+       
         //update turn
+
+        //state version
+        newstate.pinned[color as usize] = pininfo.0;
+        newstate.pinned[color as usize]= pininfo.1;
+        newstate.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
+        newstate.prev = Some(Rc::from(statecopy));
+        newstate.prev_move = bm;
+        self.state = Rc::from(newstate);
         self.turn = enemy as u8;
-        self.prev = Some(Rc::from(boardcopy));
-        self.prev_move = bm;
-        
+
     }
 
     pub fn pop(&mut self) {
-        let previous = self.prev.as_ref().unwrap().clone();
-        let penult = previous.prev.clone();
-        let color = previous.turn;
-        let enemy = if color == 0 {1} else {0};
-        let bm = self.prev_move;
+
+        let statecopy = &self.state;         //save copy of current state
+        let previous = self.state.prev.as_ref().cloned().unwrap(); //get the previous state
+
+        //for the purposes of this function, treat the player who's move is being undone as the friendly side
+        let color = if self.turn == 0 {1} else {0};
+        let enemy = self.turn;
+        
+
+        let bm = self.state.prev_move;
+        // println!("Undoing");
+        // bm.print();
         //disect previous move
+
         let quiet = bm.isquiet();
         let ep = bm.isep();
         let castle = bm.iscastle();
         let capture = bm.iscapture();
         let prom = bm.isprom();
         let dbpush = bm.isdoublepawn();
+
         let from = bm.getSrc();
         let to = bm.getDst();
-        let piece = previous.piecelocs.piece_at(from);
-        assert!(piece.get_color() == color);
+
+        let piece = self.piecelocs.piece_at(to);
+        
+
         if castle {
             self.undo_castling(from as i8, to as i8);
         } else {
+            assert!(piece.get_color() == color);
             if prom {
                 let promidx = self.piecelocs.piece_at(to).getidx();
                 self.pieces[promidx] ^= (1<<to);
@@ -207,16 +208,15 @@ impl Board {
             //remove from dest square, place back at from square
             self.piecelocs.remove(to);
             self.piecelocs.place(from, piece);
-            
+
 
             //restore moved piece bitboard by toggling from and to squares
             let pieceidx = piece.getidx();
-            self.pieces[pieceidx] |= (1<<from);
-            self.pieces[pieceidx] ^= (1<<to);
+            self.pieces[pieceidx] ^= (1<<to) | (1<<from);
             assert!(piece.get_color() == color);
             if capture {
                 //get captured piece and put it back on the square it was captured on
-                let mut capturedpiece = previous.piecelocs.piece_at(to);
+                let mut capturedpiece = statecopy.capturedpiece.to_piece(enemy);
                 let mut capsq = to;
                 if ep {
                     capturedpiece = if color == 0 {Piece::BP} else {Piece::WP};
@@ -233,7 +233,10 @@ impl Board {
                 
                 //place the capturedpiece back where it was before being captured
                 self.piecelocs.place(capsq, capturedpiece);
-                self.occupied ^= (1<<to);
+                self.occupied ^= (1<<capsq);
+                
+                
+                
             }
             
             //put moved piece back
@@ -251,18 +254,12 @@ impl Board {
         // self.playerpieces = previous.playerpieces;
         // self.occupied = previous.occupied;
         // self.piecelocs = previous.piecelocs;
-        self.ep_square = previous.ep_square;
-        self.castling_rights = previous.castling_rights;
-        self.pinned = previous.pinned;
-        self.attacked = previous.attacked;
-        self.turn = color;
-        self.prev = penult;
-        self.prev_move = previous.prev_move;
-        //TODO: undo castling if any, unset ep square, restore pinned info from previous, restore attacked squares from previous
         
-        //need to check if the squares interacted with last turn are a king square or rook square
-        //TODO: update turn, 
-
+        //set state to old state
+        self.state = previous;
+        self.turn = color;
+        //state version
+        
     }
 
     pub fn apply_castling(&mut self, ksrc: i8, rsrc: i8) {
@@ -341,13 +338,33 @@ impl Board {
         let result = self.occupied >> (rank * 8 + file);
         return if result & 1 == 1 { true } else { false };
     }
-
+    pub fn getpinned(&self) -> [u64;2] {
+        self.state.pinned
+    }
+    pub fn getattacked(&self) -> [u64;2] {
+        self.state.attacked
+    }
+    pub fn getep(&self) -> u8 {
+        self.state.ep_square
+    }
     //creates board from fen string
     pub fn from_fen(&mut self, fen: String) {
         let mut fields = fen.split(" ");
         let pieces = fields.next().unwrap().chars();
         let mut rank: usize = 7;
         let mut file: usize = 0;
+
+        let mut state = BoardState {    
+            castling_rights: 0,
+            ep_square: 0,
+            capturedpiece: PieceType::NONE,
+            pinned: [0; 2], //friendly pieces
+            pinners: [0; 2], //enemy pieces
+            attacked: [0; 2],
+            prev: None,
+            prev_move: Move::new(),  
+        };
+
         for c in pieces {
             if c.is_numeric() {
                 //skip this number of squares
@@ -361,14 +378,9 @@ impl Board {
             }
         }
         let color = fields.next().unwrap();
-        if color.chars().nth(0).unwrap() == 'w' {
-            self.turn = 0;
-        } else {
-            self.turn = 1;
-        }
+        
 
         let castling_rights = fields.next().unwrap();
-        self.castling_rights = castling::get_castling_mask(castling_rights);
         let mut ep_sq = 0;
         let ep = fields.next().unwrap();
         for (i, ch) in ep.chars().enumerate() {
@@ -394,13 +406,24 @@ impl Board {
                 }
             }
         }
-        self.ep_square = ep_sq;
+        if color.chars().nth(0).unwrap() == 'w' {
+            self.turn = 0;
+        } else {
+            self.turn = 1;
+        }
         //get pininfo (eventually, think about refactoring this. look how ugly that is. Brother ewww)
         let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
-        self.pinned[self.turn as usize] = pininfo.0;
-        self.pinners[self.turn as usize] = pininfo.1;
-        self.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied)
 
+        //state version
+        state.castling_rights = castling::get_castling_mask(castling_rights);
+        state.ep_square = ep_sq;
+        //get pininfo (eventually, think about refactoring this. look how ugly that is. Brother ewww)
+        state.pinned[self.turn as usize] = pininfo.0;
+        state.pinners[self.turn as usize] = pininfo.1;
+        state.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
+
+
+        self.state = Rc::new(state);
     }
 
     //updates the board state by placing a piece at a location
@@ -426,7 +449,7 @@ impl Board {
     }
     
     //returns string of board
-    pub fn toStr(&self) -> String {
+    pub fn print(&self) {
         let mut s = String::from("+---+---+---+---+---+---+---+---+");
         for r in (0..=7).rev() {
             let mut row = String::from("\n|");
@@ -437,7 +460,7 @@ impl Board {
             s.push_str(&row)
         }
         s.push_str("\n   a  b  c  d  e  f  g  h\n");
-        s
+        println!("{}",s);
     }
   
   

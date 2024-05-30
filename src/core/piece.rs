@@ -64,6 +64,9 @@ impl Piece {
         }
     }
     pub fn get_color(self) -> u8 {
+        if self == Piece::None {
+            panic!("Cannot get color of none piece");
+        }
         return unsafe { 
             let color = mem::transmute((self as u8 >> 3) & 0b1);
             color };

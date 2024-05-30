@@ -4,27 +4,26 @@
 mod core;
 use core::constlib;
 use std::env;
-
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
     println!("Hello, world!");
 
     let mut board = core::Board::new();
-    board.from_fen(String::from("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1  "));
+    board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+    "));
     
     // board.from_fen(String::from("k5r1/3P1P2/8/8/8/8/8/3K4 b - - 0 1"));
     let mg = core::movegen::MoveGenerator::new();
-    
-    // println!("Running perft....");
-    // for i in 1..4 {
-    //     let res = constlib::perft(&mut board,i,&mg);
-    //     println!("Perft: depth = {}, result = {}",i, res);
-    // }
-    let start = Instant::now();
-    let ml = mg.generate(&board);
-    println!("Time to generate moves: {}",start.elapsed().as_secs() );
-    for bm in ml {
+    for bm in mg.generate(&board) {
         bm.print();
+    }
+    use std::time::Instant;
+    println!("Running perft....");
+    for i in 1..5 {
+        let start = Instant::now();
+        let res = constlib::perft(&mut board,i,&mg);
+        println!("Perft: depth = {}, result = {}",i, res);
+        println!("Time to generate moves: {}",start.elapsed().as_secs() );
     }
     // board.push(mlc[2]);
     // board.pop();

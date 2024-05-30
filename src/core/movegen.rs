@@ -63,6 +63,9 @@ impl MoveGenerator {
         let mut attacks = self.king[ind as usize];
         //call helper function to get all attacked squares by enemy
         let kingdanger = self.getkingdangermask(board);
+        // if color == 1 {
+        //   constlib::print_bitboard(kingdanger);
+        // }
         attacks &= !kingdanger;
         attacks &= !board.playerpieces[color as usize];
         while attacks != 0 {
@@ -84,7 +87,7 @@ impl MoveGenerator {
         let mut attacks = constlib::compute_rook(ind as i8,board.occupied) | constlib::compute_bishop(ind as i8, board.occupied);
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
-        if board.pinned[color as usize] & (1 << ind) != 0 {
+        if board.getpinned()[color as usize] & (1 << ind) != 0 {
           let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
@@ -112,7 +115,7 @@ impl MoveGenerator {
         let mut attacks = constlib::compute_rook(ind as i8,board.occupied);
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
-        if board.pinned[color as usize] & (1 << ind) != 0 {
+        if board.getpinned()[color as usize] & (1 << ind) != 0 {
           let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
@@ -141,7 +144,7 @@ impl MoveGenerator {
         let mut attacks = constlib::compute_bishop(ind as i8,board.occupied);
         //returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
-        if board.pinned[color as usize] & (1 << ind) != 0 {
+        if board.getpinned()[color as usize] & (1 << ind) != 0 {
           let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
@@ -166,7 +169,7 @@ impl MoveGenerator {
       let mut kbb = if color == 0 {board.pieces[PieceIndex::N.index()]} else {board.pieces[PieceIndex::n.index()]};
       while kbb != 0 {
         let ind = constlib::poplsb(&mut kbb);
-        if board.pinned[color as usize] & (1 << ind) != 0 {
+        if board.getpinned()[color as usize] & (1 << ind) != 0 {
           //knight is pinned, just return
           return
         }
@@ -201,7 +204,7 @@ impl MoveGenerator {
         //moves are legal if square is not occupied
         let mut moves = self.pawnmoves[color as usize][ind as usize];
         moves &= !board.occupied;
-        if board.pinned[color as usize] & (1 << ind) != 0 {
+        if board.getpinned()[color as usize] & (1 << ind) != 0 {
           let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
@@ -255,22 +258,24 @@ impl MoveGenerator {
           attacks &= target.0 | target.1;
         }
         
-        if(self.pawnattacks[color as usize][ind as usize] & (1<<board.ep_square) != 0) 
+        //generate ep moves
+        let ep = board.getep();
+        if(self.pawnattacks[color as usize][ind as usize] & (1<<ep) != 0) 
         && (constlib::get_rank(ind as u8) != 2) && (constlib::get_rank(ind as u8) != 7)
         {
           if evasions {
             let offset = if color == 0 {-8} else {8};
-            if (1 << board.ep_square) & target.1 != 0{
-              movelist.push(Move::makeEP(ind as u8, board.ep_square));
-            } else if (1 << (board.ep_square as i8 + offset)) & target.0 != 0{
-              movelist.push(Move::makeEP(ind as u8, board.ep_square));
+            if (1 << ep) & target.1 != 0{
+              movelist.push(Move::makeEP(ind as u8, ep));
+            } else if (1 << (ep as i8 + offset)) & target.0 != 0{
+              movelist.push(Move::makeEP(ind as u8, ep));
             }
           } else {
-            let enemypawn = if color == 0 {board.ep_square - 8} else {board.ep_square + 8};
+            let enemypawn = if color == 0 {ep - 8} else {ep + 8};
             let blockers = board.occupied & !((1<<ind) | (1<<enemypawn));
             let checkers = self.getcheckers(board, blockers);
             if checkers == 0 {
-              movelist.push(Move::makeEP(ind as u8, board.ep_square));
+              movelist.push(Move::makeEP(ind as u8, ep));
             }
           }
 
@@ -380,16 +385,17 @@ impl MoveGenerator {
     pub fn generatecastling(&self, board:&Board, movelist: &mut Vec<Move>){
       //generate castling moves
       let color = board.turn;
-      if oppressed(board.castling_rights) {
+      let castlingrights = board.state.castling_rights;
+      if oppressed(castlingrights) {
         //if there are no castling rights, return
         return
       }
       let kingsq = if color == 0 {4} else {60};
-      let attacked = board.attacked[color as usize];
+      let attacked = board.getattacked()[color as usize];
       if color == 0
       { 
         //generate white caslting moves
-        if wkingside(board.castling_rights) {
+        if wkingside(castlingrights) {
           //check if castling is obstructed
           let between = constlib::squarebb_from_string("f1") | constlib::squarebb_from_string("g1");
           if (board.occupied & between != 0) || (between & attacked != 0){
@@ -397,7 +403,7 @@ impl MoveGenerator {
             movelist.push(Move::makeKingCastle(kingsq,7))
           }
         }
-        if wqueenside(board.castling_rights) {
+        if wqueenside(castlingrights) {
           let between = constlib::squarebb_from_string("b1") |constlib::squarebb_from_string("c1") | constlib::squarebb_from_string("d1");
           if (board.occupied & between != 0) || (between & attacked != 0){
           } else {
@@ -406,14 +412,14 @@ impl MoveGenerator {
         }
       } else {
         //black castling 
-        if bkingside(board.castling_rights) {
+        if bkingside(castlingrights) {
           let between = constlib::squarebb_from_string("f8") | constlib::squarebb_from_string("g8");
           if (board.occupied & between != 0) || (between & attacked != 0){
           } else {
             movelist.push(Move::makeKingCastle(kingsq,63))
           }
         }
-        if bqueenside(board.castling_rights) {
+        if bqueenside(castlingrights) {
           let between = constlib::squarebb_from_string("b8") |constlib::squarebb_from_string("c8") | constlib::squarebb_from_string("d8");
           if (board.occupied & between != 0) || (between & attacked != 0){
           } else {
@@ -468,9 +474,11 @@ impl MoveGenerator {
       let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
       let mut kingdanger = 0;
       let blockers = board.occupied & !board.pieces[kingidx];
-
+      let king = board.pieces[kingidx].trailing_zeros();
       kingdanger |= self.makeattackedmask(board, blockers);
+
       kingdanger
+      
     }
 
 
@@ -487,9 +495,9 @@ impl MoveGenerator {
       let bbb = board.pieces[(6*enemy+PieceIndex::B.index())];
       let rbb = board.pieces[(6*enemy+PieceIndex::R.index())];
       let qbb = board.pieces[(6*enemy+PieceIndex::Q.index())];
-
       let batt = constlib::compute_bishop(kingsq, blockers);
       let ratt = constlib::compute_rook(kingsq, blockers);
+      
       attackers |= (self.pawnattacks[color as usize][kingsq as usize] & pbb)
                 |  (self.knight[kingsq as usize] & nbb) 
                 |  (batt & bbb)

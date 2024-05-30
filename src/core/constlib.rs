@@ -49,12 +49,13 @@ pub const filesmasks: [u64; 8] = initFileMaskLookup();
 pub const notAFile:u64 = 0xfefefefefefefefe; // ~0x0101010101010101
 pub const notHFile:u64 = 0x7f7f7f7f7f7f7f7f; // ~0x8080808080808080
 
+
 pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64{
-  let ml = mg.generate(board);
   let mut ct = 0;
   if depth == 0 {
       return 1
   }
+  let ml = mg.generate(board);
   for bm in ml {
       board.push(bm);
       ct += perft(board, depth - 1, mg);
