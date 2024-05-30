@@ -473,7 +473,7 @@ impl MoveGenerator {
       kingdanger
     }
 
-    
+
     #[inline(always)]
     pub fn getcheckers(&self, board:&Board, blockers: u64) -> u64 {
       let color = board.turn;

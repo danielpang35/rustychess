@@ -20,9 +20,9 @@ fn main() {
     //     let res = constlib::perft(&mut board,i,&mg);
     //     println!("Perft: depth = {}, result = {}",i, res);
     // }
-    
+    let start = Instant::now();
     let ml = mg.generate(&board);
-    
+    println!("Time to generate moves: {}",start.elapsed().as_secs() );
     for bm in ml {
         bm.print();
     }
