@@ -69,7 +69,6 @@ impl Board {
         
         assert!(piece != Piece::None);
         //TODO: refactor this: just pass around a board state reference
-        let statecopy = (*self.state).clone();
         let mut newstate = BoardState::new();
         if castle {
             //get side of castling
@@ -150,20 +149,26 @@ impl Board {
         }
         //update pininfo and attacked squares
         //also yea... you need to refactor this ugly ass code...
-        let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
 
        
         //update turn
 
         //state version
-        newstate.pinned[color as usize] = pininfo.0;
-        newstate.pinned[color as usize]= pininfo.1;
+        
         newstate.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
-        newstate.prev = Some(Rc::from(statecopy));
+        newstate.prev = Some(Rc::clone(&self.state));
         newstate.prev_move = bm;
-        self.state = Rc::from(newstate);
+        
         self.turn = enemy as u8;
+        let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
 
+        newstate.pinned[enemy as usize] = pininfo.0;
+        // if pininfo.0 != 0 {constlib::print_bitboard(newstate.pinned[color as usize]);
+        // }
+        newstate.pinners[enemy as usize]= pininfo.1;
+
+        self.state = Rc::from(newstate);
+        assert!(!(self.state == *self.state.prev.as_ref().unwrap()));
     }
 
     pub fn pop(&mut self) {
@@ -257,6 +262,9 @@ impl Board {
         
         //set state to old state
         self.state = previous;
+        if self.state.pinned[color as usize] != 0{
+            constlib::print_bitboard(self.state.pinned[color as usize]);
+        }
         self.turn = color;
         //state version
         
@@ -338,6 +346,8 @@ impl Board {
         let result = self.occupied >> (rank * 8 + file);
         return if result & 1 == 1 { true } else { false };
     }
+
+    
     pub fn getpinned(&self) -> [u64;2] {
         self.state.pinned
     }
@@ -412,14 +422,14 @@ impl Board {
             self.turn = 1;
         }
         //get pininfo (eventually, think about refactoring this. look how ugly that is. Brother ewww)
-        let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
+        // let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
+        // state.pinned[self.turn as usize] = pininfo.0;
+        // state.pinners[self.turn as usize] = pininfo.1;
 
         //state version
         state.castling_rights = castling::get_castling_mask(castling_rights);
         state.ep_square = ep_sq;
         //get pininfo (eventually, think about refactoring this. look how ugly that is. Brother ewww)
-        state.pinned[self.turn as usize] = pininfo.0;
-        state.pinners[self.turn as usize] = pininfo.1;
         state.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
 
 

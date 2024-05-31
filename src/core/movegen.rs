@@ -35,7 +35,7 @@ impl MoveGenerator {
         moveg
     }
     #[inline(always)]
-    pub fn generate(&self, board: &Board)->Vec<Move>
+    pub fn generate(& self, board: &mut Board)->Vec<Move>
       {
         let mut moves = Vec::new();
         let mut checkers = self.getcheckers(board, board.occupied); 
@@ -195,6 +195,9 @@ impl MoveGenerator {
       //creates a bitmove for each possible move
       //mutates given array
       let color = board.turn;
+      println!("Making pawn moves for {} ", color);
+      // constlib::print_bitboard(board.getpinned()[color as usize]);
+      // board.print();
       let mut pbb = if color == 0 {board.pieces[PieceIndex::P.index()]} else {board.pieces[PieceIndex::p.index()]};
       //println!("making pawn moves for {}",if color == 0 {"WHITE"} else {"BLACK"});
       while pbb != 0 {
@@ -209,6 +212,9 @@ impl MoveGenerator {
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
           moves &= self.line_between[kingsq as usize][ind as usize];
+          constlib::print_bitboard(moves);
+          constlib::print_bitboard(self.line_between[kingsq as usize][ind as usize]);
+
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {

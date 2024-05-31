@@ -1,7 +1,7 @@
 pub use std::rc::Rc;
 pub use crate::core::r#move::Move;
 pub use super::piece::PieceType;
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 
 pub struct BoardState {    
     pub castling_rights: u8,
@@ -27,6 +27,9 @@ impl BoardState {
             prev_move: Move::new(),  
         }
     }
-    
+    pub fn setpinned(&mut self, pinned: u64, turn: u8) {
+        self.pinned[turn as usize] = pinned;
+    }
+
 }
 

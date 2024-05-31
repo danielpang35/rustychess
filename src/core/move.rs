@@ -32,7 +32,7 @@ const CP_MASK: u16 = 0b0100_000000_000000; //encodes a capture
 const FLAG_MASK: u16 = 0b1111_000000_000000;
 const SP_MASK: u16 = 0b0011_000000_000000; //encodes which piece to promote to. If not promotion, then this encodes castling or ep
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone,PartialEq)]
 pub struct Move {
     data: u16,
 }

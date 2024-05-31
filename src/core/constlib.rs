@@ -58,8 +58,13 @@ pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64{
   let ml = mg.generate(board);
   for bm in ml {
       board.push(bm);
-      ct += perft(board, depth - 1, mg);
+      let moves = perft(board, depth - 1, mg);
+      bm.print();
+      if depth == 2{
+      println!("count: {}", moves);}
+      ct += moves;
       board.pop();
+      
   }
   ct
 }
