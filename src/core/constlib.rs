@@ -59,8 +59,8 @@ pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64{
   for bm in ml {
       board.push(bm);
       let moves = perft(board, depth - 1, mg);
-      bm.print();
-      if depth == 2{
+      if depth == 4{
+        bm.print();
       println!("count: {}", moves);}
       ct += moves;
       board.pop();
