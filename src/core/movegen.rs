@@ -195,7 +195,6 @@ impl MoveGenerator {
       //creates a bitmove for each possible move
       //mutates given array
       let color = board.turn;
-      println!("Making pawn moves for {} ", color);
       // constlib::print_bitboard(board.getpinned()[color as usize]);
       // board.print();
       let mut pbb = if color == 0 {board.pieces[PieceIndex::P.index()]} else {board.pieces[PieceIndex::p.index()]};
@@ -212,8 +211,6 @@ impl MoveGenerator {
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb);
           moves &= self.line_between[kingsq as usize][ind as usize];
-          constlib::print_bitboard(moves);
-          constlib::print_bitboard(self.line_between[kingsq as usize][ind as usize]);
 
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker

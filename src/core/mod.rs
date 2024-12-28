@@ -262,9 +262,7 @@ impl Board {
         
         //set state to old state
         self.state = previous;
-        if self.state.pinned[color as usize] != 0{
-            constlib::print_bitboard(self.state.pinned[color as usize]);
-        }
+        
         self.turn = color;
         //state version
         

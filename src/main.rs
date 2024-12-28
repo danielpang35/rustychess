@@ -13,9 +13,9 @@ fn main() {
     
     // board.from_fen(String::from("k5r1/3P1P2/8/8/8/8/8/3K4 b - - 0 1"));
     let mg = core::movegen::MoveGenerator::new();
-    for bm in mg.generate(&mut board) {
-        bm.print();
-    }
+    // for bm in mg.generate(&mut board) {
+    //     bm.print();
+    // }
     use std::time::Instant;
     println!("Running perft....");
     for i in 1..5 {
