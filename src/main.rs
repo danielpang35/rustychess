@@ -9,9 +9,9 @@ fn main() {
     println!("Hello, world!");
 
     let mut board = core::Board::new();
-    board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1    "));
+    //board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1    "));
     
-    // board.from_fen(String::from("k5r1/3P1P2/8/8/8/8/8/3K4 b - - 0 1"));
+    board.from_fen(String::from("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - "));
     let mg = core::movegen::MoveGenerator::new();
     // for bm in mg.generate(&mut board) {
     //     bm.print();
