@@ -90,8 +90,9 @@ impl MoveGenerator {
         if board.getpinned()[color as usize] & (1 << ind) != 0 {
           let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
           let mut kbb = board.pieces[kingidx];
-          let kingsq = constlib::poplsb(&mut kbb);
-          attacks &= self.line_between[kingsq as usize][ind as usize];
+          let kingsq = constlib::poplsb(&mut kbb) as i8;
+          let full_lines = constlib::compute_rook(kingsq, 0) | constlib::compute_bishop(kingsq, 0);
+          attacks &= full_lines;
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
@@ -113,13 +114,21 @@ impl MoveGenerator {
       while rbb != 0 {
         let ind = constlib::poplsb(&mut rbb);
         let mut attacks = constlib::compute_rook(ind as i8,board.occupied);
-        //returned attacks allow friendly pieces to be captured.
+        // returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
-        if board.getpinned()[color as usize] & (1 << ind) != 0 {
+        // If piece is pinned, restrict to king ray but allow capturing the pinner
+        let (pinned_mask, pinners_mask) = self.getpinned(board);
+        if pinned_mask & (1 << ind) != 0 {
           let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
           let mut kbb = board.pieces[kingidx];
-          let kingsq = constlib::poplsb(&mut kbb);
-          attacks &= self.line_between[kingsq as usize][ind as usize];
+          let kingsq = constlib::poplsb(&mut kbb) as i8;
+          let full_rook_line = constlib::compute_rook(kingsq, 0);
+          // restrict moves to line between piece and king
+          attacks &= full_rook_line;
+          // allow capture of the pinner (pinner square sits on the same line)
+          attacks |= pinners_mask & full_rook_line;
+          // remove any friendly pieces again (in case pinners_mask introduced friendly bits)
+          attacks &= !board.playerpieces[color as usize];
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
@@ -142,13 +151,21 @@ impl MoveGenerator {
       while bbb != 0 {
         let ind = constlib::poplsb(&mut bbb);
         let mut attacks = constlib::compute_bishop(ind as i8,board.occupied);
-        //returned attacks allow friendly pieces to be captured.
+        // returned attacks allow friendly pieces to be captured.
         attacks &= !board.playerpieces[color as usize];
-        if board.getpinned()[color as usize] & (1 << ind) != 0 {
+        // If piece is pinned, restrict to king ray but allow capturing the pinner
+        let (pinned_mask, pinners_mask) = self.getpinned(board);
+        if pinned_mask & (1 << ind) != 0 {
           let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
           let mut kbb = board.pieces[kingidx];
-          let kingsq = constlib::poplsb(&mut kbb);
-          attacks &= self.line_between[kingsq as usize][ind as usize];
+          let kingsq = constlib::poplsb(&mut kbb) as i8;
+          let full_bishop_line = constlib::compute_bishop(kingsq, 0);
+          // restrict moves to line between piece and king
+          attacks &= full_bishop_line;
+          // allow capture of the pinner (pinner square sits on the same line)
+          attacks |= pinners_mask & full_bishop_line;
+          // remove any friendly pieces again
+          attacks &= !board.playerpieces[color as usize];
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
         if evasions {
@@ -200,7 +217,7 @@ impl MoveGenerator {
       let mut pbb = if color == 0 {board.pieces[PieceIndex::P.index()]} else {board.pieces[PieceIndex::p.index()]};
       //println!("making pawn moves for {}",if color == 0 {"WHITE"} else {"BLACK"});
       while pbb != 0 {
-        let ind = pbb.trailing_zeros();
+        let ind = constlib::poplsb(&mut pbb);
         //get pawn moves and attacks at square
         
         //moves are legal if square is not occupied
@@ -209,8 +226,10 @@ impl MoveGenerator {
         if board.getpinned()[color as usize] & (1 << ind) != 0 {
           let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
           let mut kbb = board.pieces[kingidx];
-          let kingsq = constlib::poplsb(&mut kbb);
-          moves &= self.line_between[kingsq as usize][ind as usize];
+          let kingsq = constlib::poplsb(&mut kbb) as i8;
+          // For pinned pawns, filter to the intersection of pawn moves and pin lines
+          let full_lines = constlib::compute_rook(kingsq, 0) | constlib::compute_bishop(kingsq, 0);
+          moves &= full_lines;
 
         }
         //if evasion is turned on, then only generate attacks which block or take opposing checker
@@ -257,6 +276,14 @@ impl MoveGenerator {
         //playerpieces is list of piece positions by color
         let enemypieces = if color == 0 {board.playerpieces[1]} else {board.playerpieces[0]};
         attacks &= enemypieces;
+        if board.getpinned()[color as usize] & (1 << ind) != 0 {
+          let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
+          let mut kbb = board.pieces[kingidx];
+          let kingsq = constlib::poplsb(&mut kbb) as i8;
+          // For pinned pawns, filter attacks to the intersection of pawn attacks and pin lines
+          let full_lines = constlib::compute_rook(kingsq, 0) | constlib::compute_bishop(kingsq, 0);
+          attacks &= full_lines;
+        }
         if evasions {
           attacks &= target.0 | target.1;
         }
@@ -297,8 +324,6 @@ impl MoveGenerator {
           }
         }
         //create capture bitmoves
-        //set last bit of pawn bb to 0
-        pbb = pbb & (pbb-1);
         //save legalmoves for this square
         }
       }
@@ -515,17 +540,23 @@ impl MoveGenerator {
       let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
       let mut king = board.pieces[kingidx];
       let kingsq = constlib::poplsb(&mut king) as i8;
-      //get square of king
-      let blockers = board.occupied;
+      
+      // For pinning detection, we need to know the rays from the king regardless of pieces in the way
+      // So we use empty blockers (0) to get the full ray
+      let blockers = 0; // empty board - we want all possible rays
+      
       //get all possible squares that a pinned piece could be along
       let pinnablemask = constlib::compute_bishop(kingsq, blockers) | constlib::compute_rook(kingsq, blockers);
+      
       //get all sliding attacks of enemy.
       let mut bbb = board.pieces[(6*enemy+PieceIndex::B.index())];
       let mut rbb = board.pieces[(6*enemy+PieceIndex::R.index())];
       let mut qbb = board.pieces[(6*enemy+PieceIndex::Q.index())];
+      
       let mut sliders = 0;
       let pinnables = board.playerpieces[color as usize];
       let mut pinners = 0;
+      
       while bbb != 0 {
         let ind = constlib::poplsb(&mut bbb);
         let batt = Self::get_ray_mask(kingsq, ind as i8);

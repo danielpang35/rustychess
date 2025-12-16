@@ -4,6 +4,8 @@ pub mod piece;
 pub mod constlib;
 pub mod r#move;
 pub mod state;
+#[cfg(test)]
+pub mod tests;
 
 pub use piece::Piece;
 pub use piece::PieceLocations;
@@ -150,22 +152,19 @@ impl Board {
         //update pininfo and attacked squares
         //also yea... you need to refactor this ugly ass code...
 
-       
-        //update turn
-
-        //state version
-        
+        // Calculate pinning info BEFORE switching turns, so getpinned sees the correct perspective
+        // We want to know what pieces the NEXT player (enemy) will have pinned
         newstate.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
-        newstate.prev = Some(Rc::clone(&self.state));
-        newstate.prev_move = bm;
         
+        // Set turn to calculate pins for the opponent BEFORE they move
         self.turn = enemy as u8;
         let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
-
         newstate.pinned[enemy as usize] = pininfo.0;
-        // if pininfo.0 != 0 {constlib::print_bitboard(newstate.pinned[color as usize]);
-        // }
-        newstate.pinners[enemy as usize]= pininfo.1;
+        newstate.pinners[enemy as usize] = pininfo.1;
+        
+        // Turn is already set to enemy, ready for next move
+        newstate.prev = Some(Rc::clone(&self.state));
+        newstate.prev_move = bm;
 
         self.state = Rc::from(newstate);
         assert!(!(self.state == *self.state.prev.as_ref().unwrap()));
@@ -419,15 +418,15 @@ impl Board {
         } else {
             self.turn = 1;
         }
-        //get pininfo (eventually, think about refactoring this. look how ugly that is. Brother ewww)
-        // let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
-        // state.pinned[self.turn as usize] = pininfo.0;
-        // state.pinners[self.turn as usize] = pininfo.1;
-
         //state version
         state.castling_rights = castling::get_castling_mask(castling_rights);
         state.ep_square = ep_sq;
+        
         //get pininfo (eventually, think about refactoring this. look how ugly that is. Brother ewww)
+        let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
+        state.pinned[self.turn as usize] = pininfo.0;
+        state.pinners[self.turn as usize] = pininfo.1;
+        
         state.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
 
 

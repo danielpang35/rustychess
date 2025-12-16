@@ -50,7 +50,7 @@ pub const notAFile:u64 = 0xfefefefefefefefe; // ~0x0101010101010101
 pub const notHFile:u64 = 0x7f7f7f7f7f7f7f7f; // ~0x8080808080808080
 
 
-pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64{
+pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64 {
   let mut ct = 0;
   if depth == 0 {
       return 1
@@ -59,12 +59,8 @@ pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64{
   for bm in ml {
       board.push(bm);
       let moves = perft(board, depth - 1, mg);
-      if depth == 4{
-        bm.print();
-      println!("count: {}", moves);}
       ct += moves;
       board.pop();
-      
   }
   ct
 }
@@ -209,27 +205,52 @@ pub fn compute_bishop(sq:i8,blockers:u64) -> u64{
     //start pos
     currpos = sq;
     loop {
-      //get diagonal direction.
-      match diag {
-        //for up right, check if wrapped around to a file. if so, break
-        0=> {currpos += northeast;
-            if currpos >= 64 || currpos % 8 <= 0 {break;}},
-        //for up left, check if wrapped around to h file. if so break
-        1=> {currpos += northwest;
-          if currpos >= 64 || currpos % 8 >= 7 {break;}},
-        2=> {currpos += southwest;
-          if currpos < 0 || currpos % 8 >= 7 {break;}},
-        3=> {currpos += southeast;
-          if currpos < 0 || currpos % 8 <=0 {break;}},
-        _ => panic!(),
+      // Calculate next position and check for wraparound BEFORE adding to attacks
+      let nextpos: i8 = match diag {
+        0 => { // northeast (up + right)
+          let file = currpos % 8;
+          if file == 7 { break; } // Already on h-file, can't go further right
+          currpos + northeast
+        },
+        1 => { // northwest (up + left)
+          let file = currpos % 8;
+          if file == 0 { break; } // Already on a-file, can't go further left
+          currpos + northwest
+        },
+        2 => { // southwest (down + left)
+          let file = currpos % 8;
+          if file == 0 { break; } // Already on a-file, can't go further left
+          currpos + southwest
+        },
+        3 => { // southeast (down + right)
+          let file = currpos % 8;
+          if file == 7 { break; } // Already on h-file, can't go further right
+          currpos + southeast
+        },
+        _ => unreachable!(),
+      };
+      
+      // Check if next position is out of bounds
+      if nextpos < 0 || nextpos >= 64 { break; }
+      
+      // Check for file wraparound by comparing old/new file positions
+      let old_file = currpos % 8;
+      let new_file = nextpos % 8;
+      if diag == 0 || diag == 3 { // northeast, southeast - moving right
+        if new_file < old_file { break; } // wrapped to left
+      } else { // northwest, southwest - moving left
+        if new_file > old_file { break; } // wrapped to right
       }
-      attacks |= genShift(currpos, 1 as u64);
-      if genShift(currpos, 1 as u64) & blockers != 0 {
+      
+      currpos = nextpos;
+      let step_bb = genShift(currpos, 1u64);
+      
+      // If this square has a blocker, stop before adding it to attacks
+      if step_bb & blockers != 0 {
         break;
       }
-      //set the current position as a potential attack
-      
-      
+      // Add this square to attacks (no blocker present)
+      attacks |= step_bb;
     }
   }
   return attacks
@@ -242,23 +263,52 @@ pub fn compute_rook(sq:i8, blockers:u64)->u64{
   for ortho in 0..4 {
     currpos = sq;
     loop {
-      match ortho {
-        //for up, check if greater than 64. if so, break
-        0=> {currpos += north;
-          if currpos >= 64 {break;}},
-        //for left, check if wrapped around to h file. if so break
-        1=> {currpos += west;
-          if currpos < 0 || currpos % 8 >= 7 {break;}},
-        2=> {currpos += south;
-          if currpos < 0 {break;}},
-        3=> {currpos += east;
-          if currpos % 8 <=0 {break;}},
-        _ => panic!(),
+      // Calculate next position and check for wraparound
+      let nextpos: i8 = match ortho {
+        0 => { // north (up): moving through ranks towards rank 8
+          let rank = currpos / 8;
+          if rank == 7 { break; } // Already on rank 8, can't go higher
+          currpos + north
+        },
+        1 => { // west (left): moving through files towards a-file
+          let file = currpos % 8;
+          if file == 0 { break; } // Already on a-file, can't go further left
+          currpos + west
+        },
+        2 => { // south (down): moving through ranks towards rank 1
+          let rank = currpos / 8;
+          if rank == 0 { break; } // Already on rank 1, can't go lower
+          currpos + south
+        },
+        3 => { // east (right): moving through files towards h-file
+          let file = currpos % 8;
+          if file == 7 { break; } // Already on h-file, can't go further right
+          currpos + east
+        },
+        _ => unreachable!(),
+      };
+      
+      // Check if next position is out of bounds
+      if nextpos < 0 || nextpos >= 64 { break; }
+      
+      // Check for file wraparound on horizontal moves
+      if ortho == 1 || ortho == 3 { // west or east
+        let old_file = currpos % 8;
+        let new_file = nextpos % 8;
+        if ortho == 3 && new_file < old_file { break; } // east but wrapped left
+        if ortho == 1 && new_file > old_file { break; } // west but wrapped right
       }
-      attacks |= genShift(currpos, 1 as u64);
-      if genShift(currpos, 1 as u64) & blockers != 0 {break;}
+      
+      currpos = nextpos;
+      let step_bb = genShift(currpos, 1u64);
+      
+      // If this square has a blocker, stop before adding it to attacks
+      if step_bb & blockers != 0 {
+        break;
+      }
+      // Add this square to attacks (no blocker present)
+      attacks |= step_bb;
     }
   }
   attacks
-    
 }

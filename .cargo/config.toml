@@ -1,0 +1,7 @@
+[build]
+# Default to single-threaded tests for clean output
+rustflags = []
+
+[test]
+# Run tests single-threaded by default for isolated output
+test-threads = 1
