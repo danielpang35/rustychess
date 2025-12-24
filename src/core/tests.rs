@@ -272,20 +272,13 @@ mod tests {
         sync_print!("\n=== Rook on d4 with blocker at d5 ===");
         sync_print_bitboard!(attacks);
         
-        // Rook can attack north up to (but not including) the blocker
-        // So it should NOT attack d5 or any square beyond d5 on the d-file
+        // Rook can attack north up to and including the blocker (capture), but not past it
         assert!(
-            (attacks >> blocker_sq) & 1 == 0,
-            "Rook should NOT attack the blocker square at d5"
+            (attacks >> blocker_sq) & 1 == 1,
+            "Rook should attack the blocker square at d5"
         );
-        
-        // It should attack squares south and on rank 4 (except itself and towards north past blocker)
-        let d5 = 35;
+        // It should not attack past the blocker
         let d6 = 43;
-        assert!(
-            (attacks >> d5) & 1 == 0,
-            "Rook should not attack blocker d5"
-        );
         assert!(
             (attacks >> d6) & 1 == 0,
             "Rook should not attack past blocker d6"
@@ -495,5 +488,60 @@ mod tests {
             0,
             "Rook on e4 should NOT be pinned"
         );
+    }
+    #[test]
+    fn debug_c2c3_e7e6_move_list() {
+        let _lock = get_print_lock().lock().unwrap();
+        sync_print!("\n=== Debug: move list after c2c3 e7e6 ===");
+
+        let mut board = crate::core::Board::new();
+        board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+        let mg = crate::core::movegen::MoveGenerator::new();
+
+        // Sequence: c2c3 (10->18), e7e6 (52->44)
+        let seq = [(10u8,18u8),(52u8,44u8)];
+        let mut pushed = 0usize;
+        for (src,dst) in seq.iter() {
+            let mut found = false;
+            for m in mg.generate(&mut board) {
+                if m.getSrc() == *src && m.getDst() == *dst {
+                    board.push(m);
+                    pushed += 1;
+                    found = true;
+                    break;
+                }
+            }
+            assert!(found, "Failed to push sequence move {}{}", constlib::squaretouci(*src), constlib::squaretouci(*dst));
+        }
+
+        // Print human-friendly board
+        sync_print!("Board after c2c3 e7e6:");
+        board.print();
+        sync_print!("Occupied bitboard:");
+        constlib::print_bitboard(board.occupied);
+
+        // Collect generated moves (UCI) at this node
+        let mut moves: Vec<String> = mg.generate(&mut board).into_iter()
+            .map(|m| format!("{}{}", constlib::squaretouci(m.getSrc()), constlib::squaretouci(m.getDst())))
+            .collect();
+        moves.sort();
+
+        sync_print!("Total moves: {}", moves.len());
+        for mv in &moves {
+            sync_print!("  {}", mv);
+        }
+
+        // Expected list (from user-provided data)
+        let mut expected = vec![
+            "a2a3","b2b3","d2d3","e2e3","f2f3","g2g3","h2h3",
+            "c3c4","a2a4","b2b4","d2d4","e2e4","f2f4","g2g4","h2h4",
+            "b1a3","g1f3","g1h3","d1c2","d1b3","d1a4",
+        ].iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        expected.sort();
+
+        // Clean up pushed moves
+        for _ in 0..pushed { board.pop(); }
+
+        assert_eq!(moves, expected, "Move list at c2c3 e7e6 does not match expected list");
     }
 }

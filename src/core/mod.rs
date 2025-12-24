@@ -109,7 +109,16 @@ impl Board {
             
             //toggle our playerpieces bitboard
             self.playerpieces[color as usize] ^= (1<<from) | (1<<to); 
-            
+
+            //below code is for printing after specific moves
+            // if (from == constlib::square_from_string("d1"))
+            // {println!("We are pushing the move b7b5. here are playerpieces after toggling. playerpieces from, to playerpieces");
+            // constlib::print_bitboard(1<<from);
+            // constlib::print_bitboard(1<<to);
+            // constlib::print_bitboard(self.playerpieces[color as usize]);
+
+            // constlib::print_bitboard(self.playerpieces[((color+1)%2) as usize]);}
+
             //update piecelocations
             self.piecelocs.place(to, piece);
             self.piecelocs.remove(from);
@@ -173,7 +182,13 @@ impl Board {
     pub fn pop(&mut self) {
 
         let statecopy = &self.state;         //save copy of current state
-        let previous = self.state.prev.as_ref().cloned().unwrap(); //get the previous state
+        let previous = match self.state.prev.as_ref().cloned() { //get the previous state
+            Some(p) => p,
+            None => {
+                eprintln!("Board::pop called but no previous state available; ignoring pop");
+                return;
+            }
+        };
 
         //for the purposes of this function, treat the player who's move is being undone as the friendly side
         let color = if self.turn == 0 {1} else {0};

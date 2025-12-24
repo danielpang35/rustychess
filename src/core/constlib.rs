@@ -245,8 +245,9 @@ pub fn compute_bishop(sq:i8,blockers:u64) -> u64{
       currpos = nextpos;
       let step_bb = genShift(currpos, 1u64);
       
-      // If this square has a blocker, stop before adding it to attacks
+      // If this square has a blocker, include it (capture square) then stop
       if step_bb & blockers != 0 {
+        attacks |= step_bb; // attacker can capture the blocker
         break;
       }
       // Add this square to attacks (no blocker present)
@@ -302,8 +303,9 @@ pub fn compute_rook(sq:i8, blockers:u64)->u64{
       currpos = nextpos;
       let step_bb = genShift(currpos, 1u64);
       
-      // If this square has a blocker, stop before adding it to attacks
+      // If this square has a blocker, include it (capture square) then stop
       if step_bb & blockers != 0 {
+        attacks |= step_bb; // attacker can capture the blocker
         break;
       }
       // Add this square to attacks (no blocker present)

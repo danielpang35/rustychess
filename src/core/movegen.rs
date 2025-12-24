@@ -156,6 +156,10 @@ impl MoveGenerator {
         // If piece is pinned, restrict to king ray but allow capturing the pinner
         let (pinned_mask, pinners_mask) = self.getpinned(board);
         if pinned_mask & (1 << ind) != 0 {
+          println!("pinned bishop");
+          board.print();
+          constlib::print_bitboard(pinners_mask);
+          constlib::print_bitboard(pinned_mask);
           let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
           let mut kbb = board.pieces[kingidx];
           let kingsq = constlib::poplsb(&mut kbb) as i8;
@@ -221,22 +225,26 @@ impl MoveGenerator {
         //get pawn moves and attacks at square
         
         //moves are legal if square is not occupied
-        let mut moves = self.pawnmoves[color as usize][ind as usize];
-        moves &= !board.occupied;
-        if board.getpinned()[color as usize] & (1 << ind) != 0 {
-          let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
-          let mut kbb = board.pieces[kingidx];
-          let kingsq = constlib::poplsb(&mut kbb) as i8;
-          // For pinned pawns, filter to the intersection of pawn moves and pin lines
-          let full_lines = constlib::compute_rook(kingsq, 0) | constlib::compute_bishop(kingsq, 0);
-          moves &= full_lines;
+        // base one-square push legality
+        let mut one_push = self.pawnmoves[color as usize][ind as usize];
+        one_push &= !board.occupied;
 
+        if board.getpinned()[color as usize] & (1 << ind) != 0 {
+            let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
+            let mut kbb = board.pieces[kingidx];
+            let kingsq = constlib::poplsb(&mut kbb) as i8;
+            let full_lines = constlib::compute_rook(kingsq, 0) | constlib::compute_bishop(kingsq, 0);
+            one_push &= full_lines;
         }
-        //if evasion is turned on, then only generate attacks which block or take opposing checker
+
+        // single pushes (final square must block check)
+        let mut single_pushes = one_push;
         if evasions {
-          moves &= target.1;
+            single_pushes &= target.1;
         }
-        let one_push = moves;
+
+        let mut moves = single_pushes;
+
         while moves != 0
         {
           //loops through pawnpushes
@@ -541,48 +549,138 @@ impl MoveGenerator {
       let mut king = board.pieces[kingidx];
       let kingsq = constlib::poplsb(&mut king) as i8;
       
-      // For pinning detection, we need to know the rays from the king regardless of pieces in the way
-      // So we use empty blockers (0) to get the full ray
-      let blockers = 0; // empty board - we want all possible rays
+      
+      let blockers = board.occupied;
       
       //get all possible squares that a pinned piece could be along
       let pinnablemask = constlib::compute_bishop(kingsq, blockers) | constlib::compute_rook(kingsq, blockers);
+
+      
       
       //get all sliding attacks of enemy.
       let mut bbb = board.pieces[(6*enemy+PieceIndex::B.index())];
       let mut rbb = board.pieces[(6*enemy+PieceIndex::R.index())];
       let mut qbb = board.pieces[(6*enemy+PieceIndex::Q.index())];
       
-      let mut sliders = 0;
-      let pinnables = board.playerpieces[color as usize];
+
+      //chat gpt mode activated...
+      //lets get all diagonal sliders...
+      let mut sliders = bbb | qbb;
       let mut pinners = 0;
+      let mut pinned = 0;
+      //lets iterate through all diagonal sliders...
+      while sliders != 0 {
+        let ind = constlib::poplsb(&mut sliders);
+
+        //lets check that the king is indeed on a diagonal from the sliding piece
+        if constlib::compute_bishop(kingsq, 0) & (1<<ind) ==0 {
+          //check if the king is on a diagonal from the given slider
+          continue;
+        }
+
+        //now, get the ray from the king to the slider
+        //then, get the ray from the slider to the king
+
+        let ray_king_to_slider = Self::get_ray_mask_blockers(kingsq, ind as i8, board.occupied);
+        let ray_slider_to_king = Self::get_ray_mask_blockers(ind as i8, kingsq, board.occupied);
+        
+        //now, get the intersection of the two rays
+        let intersection = ray_king_to_slider & ray_slider_to_king;
+        if intersection.count_ones() != 1 {
+          //if the intersection is not exactly one square, then the piece is not pinned
+          continue;
+        }
+
+        if (ray_slider_to_king & board.occupied) != intersection{
+          //this means that along the ray from the slider to the king, there is another piece other than just the exisiting intersection
+          continue;
+        }
+        
+        pinned |= 1<< intersection;
+        pinners |= 1<< ind;
+        
+      }
+
+
+      //now, get all orthogonal sliders...
+      let mut sliders = rbb | qbb;
+      while sliders != 0 {
+        let ind = constlib::poplsb(&mut sliders);
+        //lets check that the king is indeed on a orthogonal line from the sliding piece
+        if constlib::compute_rook(kingsq, 0) & (1<<ind) ==0 {
+          //check if the king is on a diagonal from the given slider
+          continue;
+        }
+
+        //now, get the ray from the king to the slider
+        //then, get the ray from the slider to the king
+
+        let ray_king_to_slider = Self::get_ray_mask_blockers(kingsq, ind as i8, board.occupied);
+        let ray_slider_to_king = Self::get_ray_mask_blockers(ind as i8, kingsq, board.occupied);
+        
+        //now, get the intersection of the two rays
+        let intersection = ray_king_to_slider & ray_slider_to_king;
+        if intersection.count_ones() != 1 {
+          //if the intersection is not exactly one square, then the piece is not pinned
+          continue;
+        }
+
+        if (ray_slider_to_king & board.occupied) != intersection{
+          //this means that along the ray from the slider to the king, there is another piece other than just the exisiting intersection
+          continue;
+        }
+        
+        pinned |= 1<< intersection;
+        pinners |= 1<< ind;
+      }
+     
       
-      while bbb != 0 {
-        let ind = constlib::poplsb(&mut bbb);
-        let batt = Self::get_ray_mask(kingsq, ind as i8);
-        if batt & pinnablemask & pinnables != 0 {
-          //if the bishop attack intersects the pinnablemask and friendly pieces, bishop is a pinner
-          pinners |= 1 << ind;
-        }
-        sliders |= batt;
-      }
-      while qbb != 0 {
-        let ind = constlib::poplsb(&mut qbb);
-        let qatt = Self::get_ray_mask(kingsq, ind as i8);
-        if qatt & pinnablemask & pinnables != 0 {
-          pinners |= 1 << ind;
-        }
-        sliders |= qatt
-      }
-      while rbb != 0{ 
-        let ind = constlib::poplsb(&mut rbb);
-        let ratt = Self::get_ray_mask(kingsq, ind as i8);
-        if ratt & pinnablemask & pinnables != 0 {
-          pinners |= 1 << ind;
-        }
-        sliders |= ratt;
-      }
-      let pinned = pinnablemask & sliders & pinnables;
+      // while bbb != 0 {
+      //   let ind = constlib::poplsb(&mut bbb);
+      //   let rayfromking = Self::get_ray_mask_blockers(kingsq, ind as i8,board.occupied);
+      //   let batt = constlib::compute_bishop(ind as i8, board.occupied);
+        
+        
+      //   let mut potentiallypinned = batt & rayfromking & pinnables;
+      //   if potentiallypinned != 0{
+      //     constlib::poplsb(&mut potentiallypinned);
+      //     //if the bishop attack intersects the pinnablemask and friendly pieces, bishop is a pinner
+      //     pinners |= 1 << ind;
+      //   }
+      //   sliders |= batt;
+      // }
+      // while qbb != 0 {
+      //   let ind = constlib::poplsb(&mut qbb);
+      //   let rayfromking = Self::get_ray_mask_blockers(kingsq, ind as i8,board.occupied);
+      //   let qatt = Self::get_ray_mask_blockers(ind as i8, kingsq, board.occupied);
+      //   let mut potentiallypinned = qatt & rayfromking & pinnables;
+      //   if potentiallypinned != 0{
+      //     constlib::poplsb(&mut potentiallypinned);
+      //     //if the bishop attack intersects the pinnablemask and friendly pieces, bishop is a pinner
+      //     // println!("queen is pinning");
+      //     // constlib::print_bitboard(qatt);
+      //     // constlib::print_bitboard(rayfromking);
+      //     // constlib::print_bitboard(pinnables);}
+      //     pinners |= 1 << ind;
+          
+
+      //   }
+      //   sliders |= qatt;
+      // }
+      // while rbb != 0{ 
+      //   let ind = constlib::poplsb(&mut rbb);
+      //   let ratt = constlib::compute_rook(ind as i8,board.occupied);
+      //   let mut potentiallypinned = ratt & pinnablemask & pinnables;
+      //   if potentiallypinned != 0{
+      //     constlib::poplsb(&mut potentiallypinned);
+      //     //if the bishop attack intersects the pinnablemask and friendly pieces, bishop is a pinner
+      //     println!("rook is pinning");
+      //     pinners |= 1 << ind;
+      //   }
+        
+      //   sliders |= ratt;
+      // }
+      // let pinned = pinnablemask & sliders & pinnables;
       (pinned, pinners)
       
     }
@@ -689,12 +787,13 @@ impl MoveGenerator {
             // Invalid ray, should not happen
             break;
         }
+        ray_mask |= 1 << square;
         if square == target_square as i8 || (1<<square) & blockers != 0{
-          break;
+            
+            break;
         }
         // Skip the source square and the target square
         
-        ray_mask |= 1 << square;
     }
     ray_mask
   }
