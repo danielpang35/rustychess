@@ -228,7 +228,7 @@ impl MoveGenerator {
         // base one-square push legality
         let mut one_push = self.pawnmoves[color as usize][ind as usize];
         one_push &= !board.occupied;
-
+        
         if board.getpinned()[color as usize] & (1 << ind) != 0 {
             let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
             let mut kbb = board.pieces[kingidx];
@@ -586,6 +586,7 @@ impl MoveGenerator {
         
         //now, get the intersection of the two rays
         let intersection = ray_king_to_slider & ray_slider_to_king;
+        
         if intersection.count_ones() != 1 {
           //if the intersection is not exactly one square, then the piece is not pinned
           continue;
@@ -596,7 +597,7 @@ impl MoveGenerator {
           continue;
         }
         
-        pinned |= 1<< intersection;
+        pinned |= intersection;
         pinners |= 1<< ind;
         
       }
@@ -630,7 +631,7 @@ impl MoveGenerator {
           continue;
         }
         
-        pinned |= 1<< intersection;
+        pinned |= intersection;
         pinners |= 1<< ind;
       }
      
@@ -681,6 +682,7 @@ impl MoveGenerator {
       //   sliders |= ratt;
       // }
       // let pinned = pinnablemask & sliders & pinnables;
+
       (pinned, pinners)
       
     }
