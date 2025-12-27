@@ -4,6 +4,7 @@ pub mod piece;
 pub mod constlib;
 pub mod r#move;
 pub mod state;
+pub mod cli;
 #[cfg(test)]
 pub mod tests;
 
@@ -52,7 +53,7 @@ impl Board {
         }
     }
 
-    pub fn push(&mut self, bm:Move) {
+    pub fn push(&mut self, bm:Move, movegen: &movegen::MoveGenerator) {
         
         let color = self.turn;
         let enemy = if color == 0 {1} else {0};
@@ -104,7 +105,7 @@ impl Board {
                 self.playerpieces[enemy as usize] ^= (1<<capsq);
                 
                 //if a piece was captured, also toggle the to square for occupied bitboard
-                newstate.capturedpiece = capturedpiece.get_piece_type();
+                newstate.capturedpiece = if ep { PieceType::P } else { capturedpiece.get_piece_type() };
             }
             
             //toggle our playerpieces bitboard
@@ -129,13 +130,15 @@ impl Board {
                     newstate.ep_square = if self.turn == 0 {to - 8} else {to + 8};
                     // constlib::print_bitboard(constlib::squaretobb(self.ep_square));
                 } else {
-                    newstate.ep_square = 0;
+                    newstate.ep_square = 64;
                 }
                 if prom {
                     let prompiece = bm.prompiece();
                     let prompiece = prompiece.to_piece(color);
                     let promidx = prompiece.getidx();
-                    self.pieces[promidx] ^= (1<<to);
+                    self.pieces[promidx] |= (1<<to);
+                    //also remove the pawn from the to square
+                    self.pieces[pieceidx] ^= (1<<to);
                     self.piecelocs.place(to,prompiece );
                 }
             } 
@@ -148,34 +151,39 @@ impl Board {
         assert!(from != to);
         //update occupied, pieces, playerpieces, change turn, update castling rights, update ep square, update piecelocs
 
-        if !castling::oppressed(self.state.castling_rights) {
-            //if there are still castling rights
-            //if a rook or king's starting square is the starting square or ending square of a move,
-            //remove that side from the castling rights
-            let updatecastlemask = !(castling::get_rights(to) | castling::get_rights(from));
-            // println!("queenside castle was:{}", castling::wqueenside(self.castling_rights));
+        //if a rook or king's starting square is the starting square or ending square of a move,
+        //remove that side from the castling rights
+        let updatecastlemask = !(castling::get_rights(to) | castling::get_rights(from));
+        // println!("queenside castle was:{}", castling::wqueenside(self.castling_rights));
 
-            // println!("Updating castle mask with : {}", format!("{updatecastlemask:b}"));
-            newstate.castling_rights &= updatecastlemask;
-        }
+        // println!("Updating castle mask with : {}", format!("{updatecastlemask:b}"));
+        newstate.castling_rights = self.state.castling_rights & updatecastlemask;
+        
         //update pininfo and attacked squares
         //also yea... you need to refactor this ugly ass code...
+        // Store pin info passed from generate() instead of recalculating
+        
+        //now that board state has been updated
+        // let's switch the player's turn,
+        // and let's calculate pins for next turn:
 
-        // Calculate pinning info BEFORE switching turns, so getpinned sees the correct perspective
-        // We want to know what pieces the NEXT player (enemy) will have pinned
-        newstate.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
-        
-        // Set turn to calculate pins for the opponent BEFORE they move
         self.turn = enemy as u8;
-        let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
-        newstate.pinned[enemy as usize] = pininfo.0;
-        newstate.pinners[enemy as usize] = pininfo.1;
+        let pin = movegen.getpinned(self);
+        newstate.pinned = pin.0;
+        newstate.pinners = pin.1;
         
-        // Turn is already set to enemy, ready for next move
+
+        // newstate.attacked[white] = all squares which white attacks after the move has been pushed
+        newstate.attacked[color as usize] = movegen.makeattackedmask(
+            self,
+            self.occupied,
+        );
+
         newstate.prev = Some(Rc::clone(&self.state));
         newstate.prev_move = bm;
 
         self.state = Rc::from(newstate);
+    
         assert!(!(self.state == *self.state.prev.as_ref().unwrap()));
     }
 
@@ -218,68 +226,77 @@ impl Board {
         } else {
             assert!(piece.get_color() == color);
             if prom {
-                let promidx = self.piecelocs.piece_at(to).getidx();
-                self.pieces[promidx] ^= (1<<to);
-            }
-            //toggle the occupied bitboard, putting the piece back where it was
-            self.occupied ^= (1<<from) | (1<<to);
+                let prom_piece = self.piecelocs.piece_at(to);
+                let promidx = prom_piece.getidx();
 
-            //remove from dest square, place back at from square
-            self.piecelocs.remove(to);
-            self.piecelocs.place(from, piece);
+                // 1) remove promoted piece from bitboards and piecelocs
+                self.pieces[promidx] ^= 1<<to;
+                self.piecelocs.remove(to);
 
+                // 2) restore pawn at from
+                let pawn = Piece::make(color, PieceType::P);
+                let pawnidx = pawn.getidx();
+                self.pieces[pawnidx] |= 1<<from;
+                self.piecelocs.place(from, pawn);
 
-            //restore moved piece bitboard by toggling from and to squares
-            let pieceidx = piece.getidx();
-            self.pieces[pieceidx] ^= (1<<to) | (1<<from);
-            assert!(piece.get_color() == color);
-            if capture {
-                //get captured piece and put it back on the square it was captured on
-                let mut capturedpiece = statecopy.capturedpiece.to_piece(enemy);
-                let mut capsq = to;
-                if ep {
-                    capturedpiece = if color == 0 {Piece::BP} else {Piece::WP};
-                    capsq = if color == 0 {to - 8} else {to + 8};
-                    self.occupied ^= (1<<capsq);
-                }
-                let capturedidx = capturedpiece.getidx();
-                self.pieces[capturedidx] ^= (1<<capsq);
+                // 3) occupied and playerpieces restoration should treat this as a normal move from->to
+                //    but do NOT toggle prom piece to from.
+                self.occupied ^= (1<<from) | (1<<to);
+                self.playerpieces[color as usize] ^= (1<<from) | (1<<to);
 
-                //restore occupied bitboard
+                // then continue with capture restoration (if capture), but skip the generic piece toggles
                 
-                //put captured piece back 
-                self.playerpieces[enemy as usize] ^= (1<<capsq);
-                
-                //place the capturedpiece back where it was before being captured
-                self.piecelocs.place(capsq, capturedpiece);
-                self.occupied ^= (1<<capsq);
-                
-                
-                
-            }
+                // IMPORTANT: return early from the non-castle branch OR guard the generic logic with `if !prom`.
+            // 4) restore captured piece if this was a capture (including prom-capture and prom-ep impossible)
+        if capture {
+            let mut capturedpiece = statecopy.capturedpiece.to_piece(enemy);
+            let mut capsq = to;
+
             
-            //put moved piece back
-            self.playerpieces[color as usize] ^= (1<<from) | (1<<to); 
-            // println!("Final friendly playerpieces after unmaking move");
-            // constlib::print_bitboard(self.playerpieces[color as usize]);
-            // println!("Final enemy playerpieces after unmaking move");
-            // constlib::print_bitboard(self.playerpieces[enemy as usize]);
-            // println!("Final moved piece bitboard after unmaking move");
-            // constlib::print_bitboard(self.pieces[pieceidx]);
-            // constlib::print_bitboard(self.pieces[PieceIndex::p.index()]);
+
+            let capturedidx = capturedpiece.getidx();
+            self.pieces[capturedidx] ^= 1<<capsq;
+            self.playerpieces[enemy as usize] ^= 1<<capsq;
+            self.piecelocs.place(capsq, capturedpiece);
+            self.occupied ^= 1<<capsq;
         }
-        //update castling rights
-        // self.pieces = previous.pieces;
-        // self.playerpieces = previous.playerpieces;
-        // self.occupied = previous.occupied;
-        // self.piecelocs = previous.piecelocs;
-        
-        //set state to old state
+
+        // promotion handled fully; skip generic undo
         self.state = previous;
-        
         self.turn = color;
-        //state version
-        
+        return;
+    }
+
+    // -------- generic non-promotion undo below --------
+
+    self.occupied ^= (1<<from) | (1<<to);
+
+    self.piecelocs.remove(to);
+    self.piecelocs.place(from, piece);
+
+    let pieceidx = piece.getidx();
+    self.pieces[pieceidx] ^= (1<<to) | (1<<from);
+
+    if capture {
+        let mut capturedpiece = statecopy.capturedpiece.to_piece(enemy);
+        let mut capsq = to;
+        if ep {
+            capturedpiece = if color == 0 {Piece::BP} else {Piece::WP};
+            capsq = if color == 0 {to - 8} else {to + 8};
+        }
+        let capturedidx = capturedpiece.getidx();
+        self.pieces[capturedidx] ^= (1<<capsq);
+        self.playerpieces[enemy as usize] ^= (1<<capsq);
+        self.piecelocs.place(capsq, capturedpiece);
+        self.occupied ^= (1<<capsq);
+    }
+
+    self.playerpieces[color as usize] ^= (1<<from) | (1<<to);
+}
+
+    // common tail
+    self.state = previous;
+    self.turn = color;
     }
 
     pub fn apply_castling(&mut self, ksrc: i8, rsrc: i8) {
@@ -360,7 +377,7 @@ impl Board {
     }
 
     
-    pub fn getpinned(&self) -> [u64;2] {
+    pub fn getpinned(&self) -> u64 {
         self.state.pinned
     }
     pub fn getattacked(&self) -> [u64;2] {
@@ -378,10 +395,10 @@ impl Board {
 
         let mut state = BoardState {    
             castling_rights: 0,
-            ep_square: 0,
+            ep_square: 64,
             capturedpiece: PieceType::NONE,
-            pinned: [0; 2], //friendly pieces
-            pinners: [0; 2], //enemy pieces
+            pinned: 0, //friendly pieces
+            pinners: 0, //enemy pieces
             attacked: [0; 2],
             prev: None,
             prev_move: Move::new(),  
@@ -433,14 +450,14 @@ impl Board {
         } else {
             self.turn = 1;
         }
-        //state version
+            //state version
+
+        let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(), self);
+        state.pinned = pininfo.0;   // ✅ Just assign directly
+        state.pinners = pininfo.1;
+
         state.castling_rights = castling::get_castling_mask(castling_rights);
         state.ep_square = ep_sq;
-        
-        //get pininfo (eventually, think about refactoring this. look how ugly that is. Brother ewww)
-        let pininfo = movegen::MoveGenerator::getpinned(&mut movegen::MoveGenerator::new(),self);
-        state.pinned[self.turn as usize] = pininfo.0;
-        state.pinners[self.turn as usize] = pininfo.1;
         
         state.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
 
@@ -476,8 +493,14 @@ impl Board {
         for r in (0..=7).rev() {
             let mut row = String::from("\n|");
             for f in 0..=7 {
-                let p = self.piecelocs.piece_at(r*8+ f).get_piece_type().get_piece_type().to_string();
-                row.push_str(&p);
+                let p = self.piecelocs.piece_at(r*8+ f);
+                let mut ch = self.piecelocs.piece_at(r*8+ f).get_piece_type().get_piece_type().to_string();
+
+                if p != Piece::None && p.get_color() == 0 {
+                    ch = ch.to_ascii_uppercase();
+                }
+
+                row.push_str(&ch);
             }
             s.push_str(&row)
         }
