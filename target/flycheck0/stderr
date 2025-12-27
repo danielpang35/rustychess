@@ -1,0 +1,68 @@
+   0.137194417s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint: stale: changed "/Users/danielpang/Desktop/rustychess/rustychess/src/search/alphabeta.rs"
+   0.137481709s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint:           (vs) "/Users/danielpang/Desktop/rustychess/rustychess/target/debug/.fingerprint/rustychess-c5a58663cda92a42/dep-lib-rustychess"
+   0.137486667s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 1766866401, nanos: 355003264 } < FileTime { seconds: 1766866563, nanos: 274575229 }
+   0.138300125s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint: fingerprint dirty for rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("rustychess", ["lib"], "/Users/danielpang/Desktop/rustychess/rustychess/src/lib.rs", Edition2021) }
+   0.138667250s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(ChangedFile { reference: "/Users/danielpang/Desktop/rustychess/rustychess/target/debug/.fingerprint/rustychess-c5a58663cda92a42/dep-lib-rustychess", reference_mtime: FileTime { seconds: 1766866401, nanos: 355003264 }, stale: "/Users/danielpang/Desktop/rustychess/rustychess/src/search/alphabeta.rs", stale_mtime: FileTime { seconds: 1766866563, nanos: 274575229 } }))
+   0.139883542s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint: stale: changed "/Users/danielpang/Desktop/rustychess/rustychess/src/search/alphabeta.rs"
+   0.139888542s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint:           (vs) "/Users/danielpang/Desktop/rustychess/rustychess/target/debug/.fingerprint/rustychess-c6fa4b67b24ee32c/dep-test-lib-rustychess"
+   0.139892917s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint:                FileTime { seconds: 1766866401, nanos: 354894306 } < FileTime { seconds: 1766866563, nanos: 274575229 }
+   0.140062709s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint: fingerprint dirty for rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("rustychess", ["lib"], "/Users/danielpang/Desktop/rustychess/rustychess/src/lib.rs", Edition2021) }
+   0.140072042s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(ChangedFile { reference: "/Users/danielpang/Desktop/rustychess/rustychess/target/debug/.fingerprint/rustychess-c6fa4b67b24ee32c/dep-test-lib-rustychess", reference_mtime: FileTime { seconds: 1766866401, nanos: 354894306 }, stale: "/Users/danielpang/Desktop/rustychess/rustychess/src/search/alphabeta.rs", stale_mtime: FileTime { seconds: 1766866563, nanos: 274575229 } }))
+   0.140372875s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="diff"}: cargo::core::compiler::fingerprint: fingerprint dirty for rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess)/Check { test: false }/TargetInner { name: "diff", doc: true, ..: with_path("/Users/danielpang/Desktop/rustychess/rustychess/src/bin/diff.rs", Edition2021) }
+   0.140381125s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="diff"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "rustychess" })
+   0.140699084s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="diff"}: cargo::core::compiler::fingerprint: fingerprint dirty for rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess)/Check { test: true }/TargetInner { name: "diff", doc: true, ..: with_path("/Users/danielpang/Desktop/rustychess/rustychess/src/bin/diff.rs", Edition2021) }
+   0.140706292s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="diff"}: cargo::core::compiler::fingerprint:     dirty: FsStatusOutdated(StaleDepFingerprint { name: "rustychess" })
+   0.141165875s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint: fingerprint error for rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess)/Check { test: false }/TargetInner { name: "rustychess", doc: true, ..: with_path("/Users/danielpang/Desktop/rustychess/rustychess/src/main.rs", Edition2021) }
+   0.141173250s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/danielpang/Desktop/rustychess/rustychess/target/debug/.fingerprint/rustychess-702edd30f830686d/bin-rustychess`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: std::backtrace::Backtrace::capture
+   2: cargo_util::paths::read_bytes
+   3: cargo_util::paths::read
+   4: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   5: cargo::core::compiler::fingerprint::prepare_target
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+   0.161611625s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint: fingerprint error for rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess)/Check { test: true }/TargetInner { name: "rustychess", doc: true, ..: with_path("/Users/danielpang/Desktop/rustychess/rustychess/src/main.rs", Edition2021) }
+   0.161622584s  INFO prepare_target{force=false package_id=rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess) target="rustychess"}: cargo::core::compiler::fingerprint:     err: failed to read `/Users/danielpang/Desktop/rustychess/rustychess/target/debug/.fingerprint/rustychess-f95e3891a53ae861/test-bin-rustychess`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: std::backtrace::Backtrace::create
+   1: std::backtrace::Backtrace::capture
+   2: cargo_util::paths::read_bytes
+   3: cargo_util::paths::read
+   4: cargo::core::compiler::fingerprint::_compare_old_fingerprint
+   5: cargo::core::compiler::fingerprint::prepare_target
+   6: cargo::core::compiler::compile
+   7: <cargo::core::compiler::build_runner::BuildRunner>::compile
+   8: cargo::ops::cargo_compile::compile_ws
+   9: cargo::ops::cargo_compile::compile_with_exec
+  10: cargo::ops::cargo_compile::compile
+  11: cargo::commands::check::exec
+  12: <cargo::cli::Exec>::exec
+  13: cargo::main
+  14: std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+  15: std::rt::lang_start::<()>::{closure#0}
+  16: std::rt::lang_start_internal
+  17: _main
+    Checking rustychess v0.1.0 (/Users/danielpang/Desktop/rustychess/rustychess)
+error: could not compile `rustychess` (bin "rustychess") due to 2 previous errors; 66 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `rustychess` (bin "rustychess" test) due to 2 previous errors; 67 warnings emitted

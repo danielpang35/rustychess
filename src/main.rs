@@ -3,28 +3,32 @@
 
 mod core;
 use core::cli;
-
 use core::constlib;
 use std::env;
+mod search;
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
     println!("Hello, world!");
 
     let mut board = core::Board::new();
     // Return to normal behavior: load starting position and run perft
-    board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+    //board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+    board.from_fen(String::from("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1 "));
     let mg = core::movegen::MoveGenerator::new();
     use std::time::Instant;
     //cli::interactive_cli(&mut board, &mg);
-
+    let search = search::Search::new();
+    let bm = search.search_root(&mut board, 4,&mg);
+    println!("Best move found: ");
+    bm.print();
     let movelist = mg.generate(&mut board);
     // Clone the board BEFORE iterating
     
     // println!("Running perft from starting position...");
 
-    for i in 1..8 {
+    for i in 1..7 {
         let start = Instant::now();
-        if i != 7 {
+        if i != 6 {
             let res = constlib::perft(&mut board,i,&mg);
             println!("Perft: depth = {}, result = {} (time {}s)", i, res, start.elapsed().as_secs_f64());
         } else {

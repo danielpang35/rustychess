@@ -124,7 +124,7 @@ fn push_pop_invariant_random_walk_small() {
     "k7/P7/8/8/8/8/7p/7K w - - 0 1",
     "k1r5/P7/8/8/8/8/8/7K w - - 0 1",
 ];
-
+    
 
     // If this test ever fails, print enough to reproduce deterministically.
     // Bump plies later if desired.

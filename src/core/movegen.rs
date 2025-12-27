@@ -540,7 +540,7 @@ impl MoveGenerator {
       kingdanger
       
     }
-
+    
 
     #[inline(always)]
     pub fn getcheckers(&self, board:&Board, blockers: u64) -> u64 {
@@ -564,6 +564,10 @@ impl MoveGenerator {
                 |  (ratt & rbb)
                 |  ((batt | ratt) & qbb);
       attackers
+    }
+    #[inline(always)]
+    pub fn in_check(&self, board: &Board) -> bool {
+        self.getcheckers(board, board.occupied) != 0
     }
     #[inline(always)]
     pub fn getpinned(&self, board:&Board) -> (u64,u64){

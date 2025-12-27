@@ -332,7 +332,6 @@ impl Board {
 
         //update playerpieces
         self.playerpieces[us as usize] ^= (1<<ksrc) | (1<<kdst) | (1<<rsrc) | (1<<rdst);
-        println!("Applied castling!");
     }
     pub fn undo_castling(&mut self, ksrc: i8, rsrc: i8) {
         //if kingside castle, then put rook and king back on their starting squares
@@ -367,7 +366,6 @@ impl Board {
 
         //update playerpieces
         self.playerpieces[enemy as usize] ^= (1<<ksrc) | (1<<kdst) | (1<<rsrc) | (1<<rdst);
-        println!("Undid castling!");
         
     }
     pub fn piece_exists_at(&self, rank: usize, file: usize) -> bool {
@@ -527,4 +525,6 @@ impl Board {
       input.push_str(s.as_str());
       return input;
   }
+
+  
 }
