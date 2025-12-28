@@ -20,6 +20,29 @@ pub const southeast: i8 = -7;
 pub const southwest: i8 = -9;
 
 
+pub const PAWN_PST: [i16; 64] = [
+      0,   0,   0,   0,   0,   0,   0,   0,
+      10,  10,  10,  10,  10,  10,  10,   10,
+      5,   5,   15,  20,   20,   10,  5,   5,
+      10,   5,   15,  40,  40,   0,   0,   0,
+      10,   5,  15,  40,  40,  5,   5,   5,
+     10,  10,  20,  20,  20,  10,  10,  10,
+      0,  0,   0,   0,   0,   10,   10,   10,
+      0,   0,   0,   0,   0,   0,   0,   0,
+];
+
+pub const KNIGHT_PST: [i16; 64] = [
+    -50, -40, -30, -30, -30, -30, -40, -50,
+    -40, -20,   0,   5,   5,   0, -20, -40,
+    -30,   5,  10,  15,  15,  10,   5, -30,
+    -30,   0,  15,  20,  20,  15,   0, -30,
+    -30,   5,  15,  20,  20,  15,   5, -30,
+    -30,   0,  10,  15,  15,  10,   0, -30,
+    -40, -20,   0,   0,   0,   0, -20, -40,
+    -50, -40, -30, -30, -30, -30, -40, -50,
+];
+
+
 pub const fn initRankMaskLookup() -> [u64; 8] {
     let rank1 = 0xFF;
     let mut arr = [0; 8];
@@ -86,6 +109,11 @@ pub fn genShift(shift: i8, bitboard: u64) -> u64 {
     }
 }
 
+//FLIP A SQUARE OVER THE MIDDLE RANK
+#[inline(always)]
+pub fn mirror_sq(sq: usize) -> usize {
+    sq ^ 56
+}
 pub fn poplsb(bitboard: &mut u64) -> u8
   {
     //returns number of zeros to lsb

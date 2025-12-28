@@ -72,8 +72,8 @@ impl MoveGenerator {
       
       let ind = kingsq;
       let mut attacks = self.king[ind as usize];
-      //call helper function to get all attacked squares by enemy
-      let kingdanger = self.getkingdangermask(board);
+      //access cached attacked array
+      let kingdanger = board.state.attacked[board.turn as usize];
       // if color == 1 {
       //   constlib::print_bitboard(kingdanger);
       // }
@@ -418,7 +418,7 @@ impl MoveGenerator {
     if oppressed(rights) { return; }
 
     // Squares attacked by the opponent (reliable for legality)
-    let kingdanger = self.getkingdangermask(board);
+    let kingdanger = board.state.attacked[color as usize];
 
     if color == 0 {
         let kingsq: u8 = constlib::square_from_string("e1");
@@ -530,15 +530,7 @@ impl MoveGenerator {
     }
     #[inline(always)]
     pub fn getkingdangermask(&self, board:&Board) -> u64 {
-      let color = board.turn;
-      let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
-      let mut kingdanger = 0;
-      let blockers = board.occupied & !board.pieces[kingidx];
-      let king = board.pieces[kingidx].trailing_zeros();
-      kingdanger |= self.makeattackedmask(board, blockers);
-
-      kingdanger
-      
+      board.state.attacked[board.turn as usize]
     }
     
 

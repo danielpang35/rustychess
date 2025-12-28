@@ -63,10 +63,10 @@ pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator) {
             mv.print();
         }
         let mut searcher = search::Search::new();
-        let bm = searcher.search_root(board,6, generator);
+        let bm = searcher.search_iterative(board,6, generator);
         board.push(bm, generator);
-        println!("Move applied: {}{}", &uci_from_square(mv.getSrc()), &uci_from_square(mv.getDst()));
-
+        println!("Move applied: ");
+        bm.print();
         println!("Legal moves: {} total", moves.len());
 
     }

@@ -25,30 +25,29 @@ fn main() {
     println!("Best move found: ");
     bm.print();
     let movelist = mg.generate(&mut board);
-    // Clone the board BEFORE iterating
     
-    // println!("Running perft from starting position...");
+    println!("Running perft from starting position...");
 
-    // for i in 1..7 {
-    //     let start = Instant::now();
-    //     if i != 6 {
-    //         let res = constlib::perft(&mut board,i,&mg);
-    //         println!("Perft: depth = {}, result = {} (time {}s)", i, res, start.elapsed().as_secs_f64());
-    //     } else {
-    //         // Do a per-move divide at depth 4
-    //         let movelist = mg.generate(&mut board);
-    //         let mut total: u64 = 0;
-    //         for m in movelist {
-    //             m.print();
-    //             board.push(m, &mg);
-    //             let cnt = constlib::perft(&mut board, i-1, &mg);
-    //             board.pop();
-    //             println!("  -> {}", cnt);
-    //             total += cnt;
-    //         }
-    //         println!("Perft: depth = {}, total = {} (time {}s)", i, total, start.elapsed().as_secs_f64());
-    //     }
-    // }
+    for i in 1..7 {
+        let start = Instant::now();
+        if i != 6 {
+            let res = constlib::perft(&mut board,i,&mg);
+            println!("Perft: depth = {}, result = {} (time {}s)", i, res, start.elapsed().as_secs_f64());
+        } else {
+            // Do a per-move divide at depth 4
+            let movelist = mg.generate(&mut board);
+            let mut total: u64 = 0;
+            for m in movelist {
+                m.print();
+                board.push(m, &mg);
+                let cnt = constlib::perft(&mut board, i-1, &mg);
+                board.pop();
+                println!("  -> {}", cnt);
+                total += cnt;
+            }
+            println!("Perft: depth = {}, total = {} (time {}s)", i, total, start.elapsed().as_secs_f64());
+        }
+    }
 
     // Targeted perft-divide for debugging: inspect subtrees for c2c3 and f2f3
     fn perft_divide_for_move(board: &mut Board, mg: &movegen::MoveGenerator, src: u8, dst: u8, depth: u8) {

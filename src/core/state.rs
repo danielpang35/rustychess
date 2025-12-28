@@ -9,7 +9,7 @@ pub struct BoardState {
     pub capturedpiece: PieceType,
     pub pinned: u64, //friendly pieces
     pub pinners: u64, //enemy pieces
-    pub attacked: [u64; 2],
+    pub attacked: [u64; 2], //  attacked[board.turn] == squares attacked by ENEMY
     pub prev: Option<Rc<BoardState>>,
     pub prev_move: Move,
 }

@@ -28,6 +28,7 @@ pub struct Board {
     pub turn: u8,
     pub piecelocs: PieceLocations,
     pub state: Rc<BoardState>,
+    pub ply: u16,
 }
 impl Board {
     //constructor
@@ -39,7 +40,7 @@ impl Board {
             turn: 0,
             piecelocs: PieceLocations::new(),
             state: Rc::new(BoardState::new()),
-
+            ply: 0,
         }
     }
     pub fn clone(&self) -> Board {
@@ -50,6 +51,7 @@ impl Board {
             turn: self.turn,
             piecelocs: self.piecelocs,
             state: Rc::clone(&self.state),
+            ply: self.ply,
         }
     }
 
@@ -73,6 +75,7 @@ impl Board {
         assert!(piece != Piece::None);
         //TODO: refactor this: just pass around a board state reference
         let mut newstate = BoardState::new();
+        self.ply += 1;
         if castle {
             //get side of castling
             self.apply_castling(from as i8, to as i8);
@@ -174,10 +177,11 @@ impl Board {
         
 
         // newstate.attacked[white] = all squares which white attacks after the move has been pushed
-        newstate.attacked[color as usize] = movegen.makeattackedmask(
-            self,
-            self.occupied,
-        );
+        let kingidx = if self.turn == 0 { PieceIndex::K.index() } else { PieceIndex::k.index() };
+        let blockers = self.occupied & !self.pieces[kingidx];
+        newstate.attacked[self.turn as usize] = movegen.makeattackedmask(self, blockers);
+
+        
 
         newstate.prev = Some(Rc::clone(&self.state));
         newstate.prev_move = bm;
@@ -264,6 +268,7 @@ impl Board {
         // promotion handled fully; skip generic undo
         self.state = previous;
         self.turn = color;
+        self.ply -= 1;
         return;
     }
 
@@ -390,7 +395,8 @@ impl Board {
         let pieces = fields.next().unwrap().chars();
         let mut rank: usize = 7;
         let mut file: usize = 0;
-
+        self.ply = 0;
+        
         let mut state = BoardState {    
             castling_rights: 0,
             ep_square: 64,
