@@ -5,7 +5,7 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
     //update search
     search.nodes += 1;
     if depth == 0 {
-        return evaluate::evaluate(board);
+        return evaluate(board);
     }   
     
     let moves = generator.generate(board);

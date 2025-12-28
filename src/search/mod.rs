@@ -1,4 +1,4 @@
 pub mod search;
-mod alphabeta;
+pub mod alphabeta;
 
 pub use search::Search;

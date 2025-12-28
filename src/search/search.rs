@@ -1,5 +1,6 @@
 use crate::core::{Board, Move, movegen::MoveGenerator};
 use crate::search::alphabeta::alphabeta;
+
 pub struct Search {
     pub nodes: u8,
 }
@@ -22,6 +23,8 @@ impl Search {
                 best_score = score;
             }
         }
+        println!("Best move found with score {}", best_score);
+        best_move.print();
         best_move
         
     }

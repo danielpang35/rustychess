@@ -6,7 +6,7 @@ use crate::core::movegen::MoveGenerator;
 use crate::core::r#move::Move;
 use crate::core::piece::PieceType;
 use crate::core::Piece;
-
+use crate::search;
 /// Convert UCI string (e.g., "e2e4", "e7e8q") into a Move
 pub fn uci_to_move(board: &Board, uci: &str) -> Option<Move> {
     if uci.len() < 4 { return None; }
@@ -62,6 +62,11 @@ pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator) {
         for mv in &moves {
             mv.print();
         }
+        let mut searcher = search::Search::new();
+        let bm = searcher.search_root(board,6, generator);
+        board.push(bm, generator);
+        println!("Move applied: {}{}", &uci_from_square(mv.getSrc()), &uci_from_square(mv.getDst()));
+
         println!("Legal moves: {} total", moves.len());
 
     }
