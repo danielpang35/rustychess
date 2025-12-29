@@ -1,0 +1,214 @@
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::response::IntoResponse;
+
+use serde::{Deserialize, Serialize};
+
+use rustychess::core::movegen::MoveGenerator;
+use rustychess::core::{Board, Move as EngineMove, PieceType};
+
+// ===== Your protocol types (as discussed) =====
+use axum::{routing::get, Router};
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new()
+        .route("/", get(|| async { "server up" }))
+        .route("/ws", get(ws_handler));
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("bind failed");
+
+    println!("http://0.0.0.0:3000  ws://0.0.0.0:3000/ws");
+
+    axum::serve(listener, app).await.expect("serve failed");
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum ClientMsg {
+    NewGame,
+    SetPosition { fen: String },
+    PlayMove { id: u16},
+    
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+enum ServerMsg {
+    State(State),
+    MoveResult { ok: bool, reason: String },
+    Error { message: String },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+struct Move {
+    id:u16,
+    from: u8,
+    to: u8,
+    promo: Option<char>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct State {
+    pub board: Vec<String>,        // 64 chars: ".PNBRQKpnbrqk"
+    pub turn: u8,
+    pub legal_moves: Vec<Move>,
+}
+
+// ===== Axum entrypoint =====
+
+pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(handle_socket)
+}
+
+async fn handle_socket(mut socket: WebSocket) {
+    let movegen = MoveGenerator::new();
+    let mut board = Board::new();
+
+    board.set_startpos();
+    
+    // Send initial state
+    if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen))).await.is_err() {
+        return;
+    }
+
+    while let Some(Ok(frame)) = socket.recv().await {
+        match frame {
+            Message::Text(text) => {
+                let parsed: Result<ClientMsg, serde_json::Error> = serde_json::from_str(&text);
+
+                let mut out: Vec<ServerMsg> = Vec::new();
+
+                match parsed {
+                    Ok(ClientMsg::NewGame) => {
+                        board.set_startpos();
+                        out.push(ServerMsg::State(make_state(&mut board, &movegen)));
+                    }
+
+                    Ok(ClientMsg::SetPosition { fen }) => {
+                        board = Board::new();         // IMPORTANT: clear board first
+                        board.from_fen(fen);          // uses your engine’s from_fen
+                        out.push(ServerMsg::State(make_state(&mut board, &movegen)));
+                    }
+
+                    Ok(ClientMsg::PlayMove { id }) => {
+                        let legal = movegen.generate(&mut board);
+
+                        if let Some(em) = legal.get(id as usize).copied() {
+                            board.push(em, &movegen);
+                            out.push(ServerMsg::MoveResult { ok: true, reason: String::new() });
+                        } else {
+                            out.push(ServerMsg::MoveResult { ok: false, reason: "Illegal move id".to_string() });
+                        }
+
+                        out.push(ServerMsg::State(make_state(&mut board, &movegen)));
+                    }
+
+                    Err(e) => {
+                        out.push(ServerMsg::Error {
+                            message: format!("Invalid JSON: {e}"),
+                        });
+                    }
+                }
+
+                for msg in out {
+                    if send_json(&mut socket, &msg).await.is_err() {
+                        return;
+                    }
+                }
+            }
+
+            Message::Ping(p) => {
+                if socket.send(Message::Pong(p)).await.is_err() {
+                    return;
+                }
+            }
+
+            Message::Close(_) => return,
+            _ => {}
+        }
+    }
+}
+
+// ===== Helpers =====
+
+fn normalize_board_cells(cells: Vec<String>) -> Result<Vec<String>, String> {
+    // 1) Trim whitespace
+    let mut trimmed: Vec<String> = cells.into_iter().map(|s| s.trim().to_string()).collect();
+
+    // 2) If it's already 64 single-character cells, accept it
+    if trimmed.len() == 64 && trimmed.iter().all(|s| s.chars().count() == 1) {
+        return Ok(trimmed);
+    }
+
+    // 3) If it's 8 rank strings of length 8 (or with separators), flatten them
+    if trimmed.len() == 8 {
+        let mut out = Vec::with_capacity(64);
+
+        for row in trimmed.drain(..) {
+            // Keep only non-whitespace chars
+            let row_chars: Vec<char> = row.chars().filter(|c| !c.is_whitespace()).collect();
+
+            if row_chars.len() != 8 {
+                return Err(format!("Rank string is not 8 chars after trimming: {:?}", row));
+            }
+
+            for ch in row_chars {
+                out.push(ch.to_string());
+            }
+        }
+
+        if out.len() == 64 && out.iter().all(|s| s.chars().count() == 1) {
+            return Ok(out);
+        }
+        return Err("Flattened board did not produce 64 single-char cells".to_string());
+    }
+
+    // 4) Otherwise, fail with a clear message
+    Err(format!(
+        "Unexpected board_to_chars() shape: len={} sample={:?}",
+        trimmed.len(),
+        trimmed.get(0..std::cmp::min(trimmed.len(), 12))
+    ))
+}fn make_state(board: &mut Board, movegen: &MoveGenerator) -> State {
+    let raw = board.board_to_chars();
+    let board_cells = normalize_board_cells(raw).expect("bad board_to_chars");
+
+    let legal = movegen.generate(board);
+
+    let legal_moves: Vec<Move> = legal
+        .iter()
+        .enumerate()
+        .map(|(i, em)| {
+            let promo = if em.isprom() {
+                Some(match em.prompiece() {
+                    PieceType::N => 'n',
+                    PieceType::B => 'b',
+                    PieceType::R => 'r',
+                    PieceType::Q => 'q',
+                    _ => 'q',
+                })
+            } else {
+                None
+            };
+
+            Move {
+                id: i as u16,
+                from: em.getSrc(),
+                to: em.getDst(),
+                promo,
+            }
+        })
+        .collect();
+
+    State {
+        board: board_cells,
+        turn: board.turn,
+        legal_moves,
+    }
+}
+async fn send_json(socket: &mut WebSocket, msg: &ServerMsg) -> Result<(), ()> {
+    let text = serde_json::to_string(msg).map_err(|_| ())?;
+    socket.send(Message::Text(text.into())).await.map_err(|_| ())
+}

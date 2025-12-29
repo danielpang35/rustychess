@@ -1,0 +1,9 @@
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\wasm_bindgen_futures-9d6f7f10bef38421.d: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\queue.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\task\singlethread.rs
+
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\libwasm_bindgen_futures-9d6f7f10bef38421.rlib: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\queue.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\task\singlethread.rs
+
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\libwasm_bindgen_futures-9d6f7f10bef38421.rmeta: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\queue.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\task\singlethread.rs
+
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\lib.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\queue.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\wasm-bindgen-futures-0.4.56\src\task\singlethread.rs:

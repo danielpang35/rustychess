@@ -1,0 +1,10 @@
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\gloo_storage-565be3339ba6cbfb.d: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\errors.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\local_storage.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\session_storage.rs
+
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\libgloo_storage-565be3339ba6cbfb.rlib: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\errors.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\local_storage.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\session_storage.rs
+
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\libgloo_storage-565be3339ba6cbfb.rmeta: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\errors.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\local_storage.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\session_storage.rs
+
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\lib.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\errors.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\local_storage.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-storage-0.3.0\src\session_storage.rs:

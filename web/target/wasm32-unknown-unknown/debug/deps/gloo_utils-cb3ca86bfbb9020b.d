@@ -1,0 +1,10 @@
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\gloo_utils-cb3ca86bfbb9020b.d: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\errors.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\iter.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\format\json.rs
+
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\libgloo_utils-cb3ca86bfbb9020b.rlib: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\errors.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\iter.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\format\json.rs
+
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\libgloo_utils-cb3ca86bfbb9020b.rmeta: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\errors.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\iter.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\format\json.rs
+
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\lib.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\errors.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\iter.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\gloo-utils-0.2.0\src\format\json.rs:

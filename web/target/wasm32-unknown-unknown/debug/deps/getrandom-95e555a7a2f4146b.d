@@ -1,0 +1,10 @@
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\getrandom-95e555a7a2f4146b.d: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\error.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\util.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\js.rs
+
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\libgetrandom-95e555a7a2f4146b.rlib: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\error.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\util.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\js.rs
+
+D:\Users\Danielpang\repos\crayfish\rustychess\web\target\wasm32-unknown-unknown\debug\deps\libgetrandom-95e555a7a2f4146b.rmeta: C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\lib.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\error.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\util.rs C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\js.rs
+
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\lib.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\error.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\util.rs:
+C:\Users\Daniel\ Pang\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.2.16\src\js.rs:
