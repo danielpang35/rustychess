@@ -15,7 +15,7 @@ pub use piece::PieceIndex;
 pub use r#move::Move;
 pub use castling::CastlingRights;
 pub use state::BoardState;
-pub use std::rc::Rc;
+pub use std::sync::Arc;
 
 
 
@@ -27,7 +27,7 @@ pub struct Board {
     pub playerpieces: [u64; 2],
     pub turn: u8,
     pub piecelocs: PieceLocations,
-    pub state: Rc<BoardState>,
+    pub state: Arc<BoardState>,
     pub ply: u16,
 }
 impl Board {
@@ -39,7 +39,7 @@ impl Board {
             playerpieces: [0; 2],
             turn: 0,
             piecelocs: PieceLocations::new(),
-            state: Rc::new(BoardState::new()),
+            state: Arc::new(BoardState::new()),
             ply: 0,
         }
     }
@@ -50,7 +50,7 @@ impl Board {
             playerpieces: self.playerpieces,
             turn: self.turn,
             piecelocs: self.piecelocs,
-            state: Rc::clone(&self.state),
+            state: Arc::clone(&self.state),
             ply: self.ply,
         }
     }
@@ -91,6 +91,7 @@ impl Board {
             self.pieces[pieceidx] |= (1<<to);
             
             if capture {
+                
                 let capturedpiece = self.piecelocs.piece_at(to);
                 let capturedidx = if ep {6*enemy+PieceIndex::P.index()}
                     else {capturedpiece.getidx()};
@@ -98,6 +99,7 @@ impl Board {
                 if ep {
                     capsq = if color == 0 {to - 8} else {to + 8};
                     self.occupied ^= (1<<capsq);
+                    self.piecelocs.remove(capsq);
                     
                 }
                 
@@ -183,10 +185,10 @@ impl Board {
 
         
 
-        newstate.prev = Some(Rc::clone(&self.state));
+        newstate.prev = Some(Arc::clone(&self.state));
         newstate.prev_move = bm;
 
-        self.state = Rc::from(newstate);
+        self.state = Arc::from(newstate);
     
         assert!(!(self.state == *self.state.prev.as_ref().unwrap()));
     }
@@ -466,9 +468,12 @@ impl Board {
         state.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
 
 
-        self.state = Rc::new(state);
+        self.state = Arc::new(state);
     }
 
+    pub fn set_startpos(&mut self) {
+        self.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+    }
     //updates the board state by placing a piece at a location
     //helper function to create board from fen
     pub fn put_piece(&mut self, ch: char, rank: usize, file: usize) {
@@ -532,5 +537,25 @@ impl Board {
       return input;
   }
 
-  
+  pub fn board_to_chars(&self) -> Vec<String> {
+    let mut out = Vec::with_capacity(64);
+
+    for sq in 0u8..64 {
+        let p = self.piecelocs.piece_at(sq);
+        let c = if p == Piece::None {
+            '.'
+        } else {
+            let mut ch = p.get_piece_type().get_piece_type(); // 'p','n','b','r','q','k'
+            if p.get_color() == 0 {
+                ch = ch.to_ascii_uppercase();
+            }
+            ch
+        };
+        out.push(c.to_string());
+    }
+
+    debug_assert_eq!(out.len(), 64);
+    debug_assert!(out.iter().all(|s| s.chars().count() == 1));
+    out
+}
 }

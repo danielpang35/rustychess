@@ -8,30 +8,43 @@ use crate::core::piece::PieceType;
 use crate::core::Piece;
 use crate::search;
 /// Convert UCI string (e.g., "e2e4", "e7e8q") into a Move
-pub fn uci_to_move(board: &Board, uci: &str) -> Option<Move> {
+pub fn uci_to_move(board: &mut Board, gen: &MoveGenerator, uci: &str) -> Option<Move> {
+    let mut uci = uci.trim().to_ascii_lowercase();
     if uci.len() < 4 { return None; }
+
     let src = constlib::square_from_string(&uci[0..2]);
     let dst = constlib::square_from_string(&uci[2..4]);
 
-    // Determine flags dynamically
-    let flag = if board.piecelocs.piece_at(dst) != Piece::None { Move::FLAG_CAPTURE }
-               else { Move::FLAG_QUIET };
-
-    // Handle promotions
-    let mv = if uci.len() == 5 {
-        let promo_piece = match &uci[4..5] {
+    let promo = if uci.len() == 5 {
+        Some(match &uci[4..5] {
             "n" | "N" => PieceType::N,
             "b" | "B" => PieceType::B,
             "r" | "R" => PieceType::R,
             "q" | "Q" => PieceType::Q,
             _ => return None,
-        };
-        Move::makeProm(src, dst, promo_piece)
+        })
     } else {
-        Move::make(src, dst, flag)
+        None
     };
 
-    Some(mv)
+    let mut moves: Vec<Move> = Vec::new();
+    // Whatever your generator entrypoint is called; adjust if needed:
+    // gen.generate(board, &mut moves, /*evasions?*/ false);
+    moves = gen.generate(board);
+
+    for mv in moves {
+        if mv.getSrc() == src && mv.getDst() == dst {
+            match promo {
+                None => {
+                    if !mv.isprom() { return Some(mv); }
+                }
+                Some(p) => {
+                    if mv.isprom() && mv.prompiece() == p { return Some(mv); }
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Interactive command line tester for the chess engine
@@ -49,7 +62,7 @@ pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator) {
             break;
         }
 
-        let mv = match uci_to_move(board, mvstr) {
+        let mv = match uci_to_move(board, generator, input.trim()) {
             Some(m) => m,
             None => { println!("Invalid move format."); continue; }
         };
@@ -67,6 +80,40 @@ pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator) {
         board.push(bm, generator);
         println!("Move applied: ");
         bm.print();
+        println!("Legal moves: {} total", moves.len());
+
+    }
+}
+
+
+/// Interactive command line tester for the chess engine
+pub fn interactive_cli_test(board: &mut Board, generator: &MoveGenerator) {
+    let mut input = String::new();
+    loop {
+        board.print();
+        println!("Enter move in UCI (or 'quit'):");
+        input.clear();
+        io::stdout().flush().unwrap();
+        io::stdin().read_line(&mut input).unwrap();
+        let mvstr = input.trim();
+
+        if mvstr == "quit" {
+            break;
+        }
+
+        let mv = match uci_to_move(board, generator, mvstr) {
+            Some(m) => m,
+            None => { println!("Invalid move format."); continue; }
+        };
+
+        board.push(mv, generator);
+        println!("Move applied: {}{}", &uci_from_square(mv.getSrc()), &uci_from_square(mv.getDst()));
+
+        // Generate legal moves
+        let moves = generator.generate(board);
+        for mv in &moves {
+            mv.print();
+        }
         println!("Legal moves: {} total", moves.len());
 
     }

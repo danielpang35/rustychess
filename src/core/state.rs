@@ -1,4 +1,4 @@
-pub use std::rc::Rc;
+pub use std::sync::Arc;
 pub use crate::core::r#move::Move;
 pub use super::piece::PieceType;
 #[derive(Clone, PartialEq)]
@@ -10,7 +10,7 @@ pub struct BoardState {
     pub pinned: u64, //friendly pieces
     pub pinners: u64, //enemy pieces
     pub attacked: [u64; 2], //  attacked[board.turn] == squares attacked by ENEMY
-    pub prev: Option<Rc<BoardState>>,
+    pub prev: Option<Arc<BoardState>>,
     pub prev_move: Move,
 }
 

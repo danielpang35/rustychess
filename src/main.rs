@@ -19,7 +19,7 @@ fn main() {
     let mg = movegen::MoveGenerator::new();
     
     use std::time::Instant;
-    cli::interactive_cli(&mut board, &mg);
+    cli::interactive_cli_test(&mut board, &mg);
     let mut search = Search::new();
     let bm = search.search_root(&mut board, 4,&mg);
     println!("Best move found: ");
