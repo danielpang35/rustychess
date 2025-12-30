@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use rustychess::core::movegen::MoveGenerator;
 use rustychess::core::{Board, Move as EngineMove, PieceType};
 
+use rustychess::search::Search;
 // ===== Your protocol types (as discussed) =====
 use axum::{routing::get, Router};
 
@@ -54,79 +55,176 @@ pub struct State {
     pub board: Vec<String>,        // 64 chars: ".PNBRQKpnbrqk"
     pub turn: u8,
     pub legal_moves: Vec<Move>,
+    pub thinking: bool,            // NEW: UI disables interaction when true
 }
-
 // ===== Axum entrypoint =====
 
 pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(handle_socket)
 }
+use tokio::sync::mpsc;
 
 async fn handle_socket(mut socket: WebSocket) {
     let movegen = MoveGenerator::new();
     let mut board = Board::new();
-
     board.set_startpos();
-    
-    // Send initial state
-    if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen))).await.is_err() {
+
+    // Engine result channel: search task -> socket loop
+    let (engine_tx, mut engine_rx) = mpsc::unbounded_channel::<EngineMove>();
+
+    let mut thinking = false;
+
+    // Initial state
+    if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, thinking)))
+        .await
+        .is_err()
+    {
         return;
     }
 
-    while let Some(Ok(frame)) = socket.recv().await {
-        match frame {
-            Message::Text(text) => {
-                let parsed: Result<ClientMsg, serde_json::Error> = serde_json::from_str(&text);
+    loop {
+        tokio::select! {
+            // 1) Engine finished thinking
+            maybe_best = engine_rx.recv() => {
+                let Some(best) = maybe_best else {
+                    // channel closed
+                    return;
+                };
 
-                let mut out: Vec<ServerMsg> = Vec::new();
+                // Apply engine move authoritatively
+                board.push(best, &movegen);
 
-                match parsed {
-                    Ok(ClientMsg::NewGame) => {
-                        board.set_startpos();
-                        out.push(ServerMsg::State(make_state(&mut board, &movegen)));
-                    }
+                thinking = false;
 
-                    Ok(ClientMsg::SetPosition { fen }) => {
-                        board = Board::new();         // IMPORTANT: clear board first
-                        board.from_fen(fen);          // uses your engine’s from_fen
-                        out.push(ServerMsg::State(make_state(&mut board, &movegen)));
-                    }
-
-                    Ok(ClientMsg::PlayMove { id }) => {
-                        let legal = movegen.generate(&mut board);
-
-                        if let Some(em) = legal.get(id as usize).copied() {
-                            board.push(em, &movegen);
-                            out.push(ServerMsg::MoveResult { ok: true, reason: String::new() });
-                        } else {
-                            out.push(ServerMsg::MoveResult { ok: false, reason: "Illegal move id".to_string() });
-                        }
-
-                        out.push(ServerMsg::State(make_state(&mut board, &movegen)));
-                    }
-
-                    Err(e) => {
-                        out.push(ServerMsg::Error {
-                            message: format!("Invalid JSON: {e}"),
-                        });
-                    }
-                }
-
-                for msg in out {
-                    if send_json(&mut socket, &msg).await.is_err() {
-                        return;
-                    }
-                }
-            }
-
-            Message::Ping(p) => {
-                if socket.send(Message::Pong(p)).await.is_err() {
+                // Send state after engine move
+                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, thinking)))
+                    .await
+                    .is_err()
+                {
                     return;
                 }
             }
 
-            Message::Close(_) => return,
-            _ => {}
+            // 2) Incoming websocket frames
+            maybe_frame = socket.recv() => {
+                let Some(Ok(frame)) = maybe_frame else {
+                    return;
+                };
+                
+                match frame {
+                    Message::Text(text) => {
+                        let parsed: Result<ClientMsg, serde_json::Error> = serde_json::from_str(&text);
+
+                        match parsed {
+                            Ok(ClientMsg::NewGame) => {
+                                if thinking {
+                                    // Optional: ignore or allow cancel. Keeping it strict for now.
+                                    let _ = send_json(&mut socket, &ServerMsg::Error { message: "Engine is thinking".to_string() }).await;
+                                    continue;
+                                }
+                                board = Board::new();
+                                board.set_startpos();
+                                let text = serde_json::to_string(&ServerMsg::State(make_state(&mut board, &movegen, thinking))).unwrap();
+                                println!("SENT: {}", text);
+                                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false)))
+                                    .await
+                                    .is_err()
+                                {
+                                    return;
+                                }
+                            }
+
+                            Ok(ClientMsg::SetPosition { fen }) => {
+                                if thinking {
+                                    let _ = send_json(&mut socket, &ServerMsg::Error { message: "Engine is thinking".to_string() }).await;
+                                    continue;
+                                }
+                                board = Board::new();
+                                board.from_fen(fen);
+
+                                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false)))
+                                    .await
+                                    .is_err()
+                                {
+                                    return;
+                                }
+                            }
+
+                            Ok(ClientMsg::PlayMove { id }) => {
+                                
+                                if thinking {
+                                    // Board is locked while engine thinks
+                                    let _ = send_json(&mut socket, &ServerMsg::MoveResult { ok: false, reason: "Engine is thinking".to_string() }).await;
+                                    continue;
+                                }
+
+                                // Recompute legal list now (authoritative)
+                                let legal = movegen.generate(&mut board);
+
+                                let Some(player_move) = legal.get(id as usize).copied() else {
+                                    let _ = send_json(&mut socket, &ServerMsg::MoveResult { ok: false, reason: "Illegal move id".to_string() }).await;
+                                    // Re-send state for UI consistency
+                                    let _ = send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false))).await;
+                                    continue;
+                                };
+
+                                // Apply player move
+                                board.push(player_move, &movegen);
+
+                                // Acknowledge
+                                if send_json(&mut socket, &ServerMsg::MoveResult { ok: true, reason: String::new() })
+                                    .await
+                                    .is_err()
+                                {
+                                    return;
+                                }
+
+                                // Immediately send state with thinking=true (locks UI)
+                                thinking = true;
+                                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, true)))
+                                    .await
+                                    .is_err()
+                                {
+                                    return;
+                                }
+
+                                // Spawn search to full depth (blocking)
+                                // IMPORTANT: we clone the board for search so we don't race the authoritative board.
+                                let tx = engine_tx.clone();
+                                let mut board_for_search = board.clone();
+                                let depth: u8 = 5;            // hardcode for now; add to protocol later
+
+                                tokio::spawn(async move {
+                                    let best = tokio::task::spawn_blocking(move || {
+                                        let mg_local = MoveGenerator::new();
+                                        let mut searcher = Search::new();
+                                        searcher.search_root(&mut board_for_search, depth, &mg_local)
+                                    }).await;
+
+                                    if let Ok(best_move) = best {
+                                        let _ = tx.send(best_move);
+                                    }
+                                });
+                            }
+
+                            Err(e) => {
+                                let _ = send_json(&mut socket, &ServerMsg::Error {
+                                    message: format!("Invalid JSON: {e}"),
+                                }).await;
+                            }
+                        }
+                    }
+
+                    Message::Ping(p) => {
+                        if socket.send(Message::Pong(p)).await.is_err() {
+                            return;
+                        }
+                    }
+
+                    Message::Close(_) => return,
+                    _ => {}
+                }
+            }
         }
     }
 }
@@ -171,11 +269,16 @@ fn normalize_board_cells(cells: Vec<String>) -> Result<Vec<String>, String> {
         trimmed.len(),
         trimmed.get(0..std::cmp::min(trimmed.len(), 12))
     ))
-}fn make_state(board: &mut Board, movegen: &MoveGenerator) -> State {
+}fn make_state(board: &mut Board, movegen: &MoveGenerator, thinking: bool) -> State {
     let raw = board.board_to_chars();
     let board_cells = normalize_board_cells(raw).expect("bad board_to_chars");
 
-    let legal = movegen.generate(board);
+    let legal = if thinking {
+        // Optional: you can send empty legal list while thinking to make UI simpler/safer.
+        Vec::new()
+    } else {
+        movegen.generate(board)
+    };
 
     let legal_moves: Vec<Move> = legal
         .iter()
@@ -206,9 +309,12 @@ fn normalize_board_cells(cells: Vec<String>) -> Result<Vec<String>, String> {
         board: board_cells,
         turn: board.turn,
         legal_moves,
+        thinking,
+
     }
 }
 async fn send_json(socket: &mut WebSocket, msg: &ServerMsg) -> Result<(), ()> {
     let text = serde_json::to_string(msg).map_err(|_| ())?;
+    
     socket.send(Message::Text(text.into())).await.map_err(|_| ())
 }

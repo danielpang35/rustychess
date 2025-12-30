@@ -304,6 +304,7 @@ impl Board {
     // common tail
     self.state = previous;
     self.turn = color;
+    self.ply -= 1;
     }
 
     pub fn apply_castling(&mut self, ksrc: i8, rsrc: i8) {
