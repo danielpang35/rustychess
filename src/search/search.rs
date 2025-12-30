@@ -30,7 +30,7 @@ impl Search {
         let killers = std::array::from_fn(|_| [null; 2]);
         let history = [[0i32; 64]; 64];
         Self { nodes: 0, qnodes: 0, lmr_reductions: 0, lmr_researches: 0, pvs_researches: 0, asp_fail_low: 0, asp_fail_high: 0, killers, history,
-        tt: TranspositionTable::new_mb(64),
+        tt: TranspositionTable::new_mb(128),
         tt_probes: 0, tt_hits: 0, tt_exact: 0, tt_cut_lower: 0, tt_cut_upper: 0, tt_move_used: 0}
     }
 

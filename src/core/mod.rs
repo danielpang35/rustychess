@@ -240,6 +240,7 @@ impl Board {
         self.state = Arc::from(newstate);
     
         assert!(!(self.state == *self.state.prev.as_ref().unwrap()));
+        debug_assert_eq!(self.state.hash, Self::compute_hash(self, &self.state));
     }
 
     pub fn pop(&mut self) {

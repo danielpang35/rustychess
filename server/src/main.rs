@@ -10,6 +10,7 @@ use rustychess::search::Search;
 // ===== Your protocol types (as discussed) =====
 use axum::{routing::get, Router};
 
+use std::sync::{Arc, Mutex};
 #[tokio::main]
 async fn main() {
     let app = Router::new()
@@ -68,6 +69,7 @@ use tokio::sync::mpsc;
 async fn handle_socket(mut socket: WebSocket) {
     let movegen = MoveGenerator::new();
     let mut board = Board::new();
+    let searcher = Arc::new(Mutex::new(Search::new()));
     board.set_startpos();
 
     // Engine result channel: search task -> socket loop
@@ -187,26 +189,19 @@ async fn handle_socket(mut socket: WebSocket) {
                                 let tx = engine_tx.clone();
                                 let mut board_for_search = board.clone();
                                 let depth: u8 = 7;            // hardcode for now; add to protocol later
-
+                                let searcher = searcher.clone();
                                 tokio::spawn(async move {
-                                    // spawn_blocking returns Result<(Move,i32), JoinError>
                                     let best: Result<(EngineMove, i32), tokio::task::JoinError> =
                                         tokio::task::spawn_blocking(move || {
                                             let mg_local = MoveGenerator::new();
-                                            let mut searcher = Search::new();
-
-                                            // This MUST return (Move, i32)
-                                            searcher.search_root(&mut board_for_search, depth, &mg_local)
+                                            let mut s = searcher.lock().unwrap();
+                                            s.search_root(&mut board_for_search, depth, &mg_local)
                                         })
                                         .await;
 
                                     match best {
-                                        Ok((best_move, best_score)) => {
-                                            let _ = tx.send((best_move, best_score));
-                                        }
-                                        Err(e) => {
-                                            eprintln!("spawn_blocking join error: {e}");
-                                        }
+                                        Ok((best_move, best_score)) => { let _ = tx.send((best_move, best_score)); }
+                                        Err(e) => eprintln!("spawn_blocking join error: {e}"),
                                     }
                                 });
                             }
