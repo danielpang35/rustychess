@@ -29,8 +29,13 @@ pub struct State {
     pub board: Vec<String>,
     pub turn: u8,
     pub legal_moves: Vec<Move>,
+
     #[serde(default)]
-    pub thinking: bool, // NEW
+    pub thinking: bool,
+
+    // NEW: engine evaluation (centipawns or mate score—see note below)
+    #[serde(default)]
+    pub eval: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -107,6 +112,7 @@ fn app() -> Html {
         turn: 0,
         legal_moves: vec![],
         thinking: false,
+        eval: None,
     });
 
     //audio
@@ -344,11 +350,15 @@ fn app() -> Html {
             selected.set(Some(sq));
         })
     };
-
+    let eval_text = match state.eval {
+        Some(cp) => format!("evaluation: {:.2}", cp as f32 / 100.0),
+        None => "evaluation: --".to_string(),
+    };
     html! {
         <div>
             <div class="row status">
                 <button onclick={on_new_game}>{"New Game"}</button>
+                <div class="mono">{eval_text}</div>
                 <div class="mono">{format!("thinking: {}", state.thinking)}</div>
                 <div class="mono">{format!("status: {}", (*status).clone())}</div>
                 <div class="mono">{format!("turn: {}", if state.turn == 0 { "white" } else { "black" })}</div>

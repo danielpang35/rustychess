@@ -12,6 +12,7 @@ pub struct BoardState {
     pub attacked: [u64; 2], //  attacked[board.turn] == squares attacked by ENEMY
     pub prev: Option<Arc<BoardState>>,
     pub prev_move: Move,
+    pub hash: u64,
 }
 
 impl BoardState {
@@ -25,6 +26,7 @@ impl BoardState {
             attacked: [0; 2],
             prev: None,
             prev_move: Move::new(),  
+            hash: 0,
         }
     }
     pub fn getpinned(&self, board: &crate::core::Board) -> (u64,u64) {

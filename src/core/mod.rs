@@ -5,6 +5,7 @@ pub mod constlib;
 pub mod r#move;
 pub mod state;
 pub mod cli;
+pub mod zobrist;
 #[cfg(test)]
 pub mod tests;
 
@@ -17,6 +18,7 @@ pub use castling::CastlingRights;
 pub use state::BoardState;
 pub use std::sync::Arc;
 
+use crate::core::zobrist::{Z_PIECE_SQ, Z_SIDE, Z_CASTLING, Z_EP_FILE};
 
 
 //a struct defining the physical aspects of the board
@@ -74,11 +76,37 @@ impl Board {
         
         assert!(piece != Piece::None);
         //TODO: refactor this: just pass around a board state reference
+        #[inline(always)]
+        fn file_of(sq: u8) -> usize { (sq & 7) as usize }
+
+        let old_castle = self.state.castling_rights;
+        let old_ep = self.state.ep_square;
+        let mut h = self.state.hash;
+
+        // remove old EP (if any)
+        if old_ep != 64 {
+            h ^= Z_EP_FILE[file_of(old_ep)];
+        }
+        // remove old castling
+        h ^= Z_CASTLING[(old_castle & 0x0F) as usize];
+
         let mut newstate = BoardState::new();
         self.ply += 1;
         if castle {
             //get side of castling
             self.apply_castling(from as i8, to as i8);
+                let ksrc = from as i8;
+                let rsrc = to as i8;
+                let kingside = ksrc < rsrc;
+                let (kdst, rdst) = if kingside { (ksrc + 2, ksrc + 1) } else { (ksrc - 2, ksrc - 1) };
+
+                let king_idx = (6 * color as usize) + PieceIndex::K.index();
+                let rook_idx = (6 * color as usize) + PieceIndex::R.index();
+
+                h ^= Z_PIECE_SQ[king_idx][ksrc as usize];
+                h ^= Z_PIECE_SQ[king_idx][kdst as usize];
+                h ^= Z_PIECE_SQ[rook_idx][rsrc as usize];
+                h ^= Z_PIECE_SQ[rook_idx][rdst as usize];
         } else {
             //update occupied bitboard
             
@@ -111,6 +139,8 @@ impl Board {
                 
                 //if a piece was captured, also toggle the to square for occupied bitboard
                 newstate.capturedpiece = if ep { PieceType::P } else { capturedpiece.get_piece_type() };
+
+                h ^= Z_PIECE_SQ[capturedidx][capsq as usize]; //ZOBRIST UPDATE FOR CAPTURE
             }
             
             //toggle our playerpieces bitboard
@@ -145,6 +175,9 @@ impl Board {
                     //also remove the pawn from the to square
                     self.pieces[pieceidx] ^= (1<<to);
                     self.piecelocs.place(to,prompiece );
+                    h ^= Z_PIECE_SQ[pieceidx][to as usize];
+                    // add promoted piece at to
+                    h ^= Z_PIECE_SQ[promidx][to as usize];
                 }
             } 
             // constlib::print_bitboard(self.pieces[pieceidx]);
@@ -163,7 +196,7 @@ impl Board {
 
         // println!("Updating castle mask with : {}", format!("{updatecastlemask:b}"));
         newstate.castling_rights = self.state.castling_rights & updatecastlemask;
-        
+
         //update pininfo and attacked squares
         //also yea... you need to refactor this ugly ass code...
         // Store pin info passed from generate() instead of recalculating
@@ -171,8 +204,24 @@ impl Board {
         //now that board state has been updated
         // let's switch the player's turn,
         // and let's calculate pins for next turn:
-
+        
+        if !castle {
+            let moved_idx = piece.getidx();
+            h ^= Z_PIECE_SQ[moved_idx][from as usize];
+            h ^= Z_PIECE_SQ[moved_idx][to as usize];
+        }
         self.turn = enemy as u8;
+        h ^= Z_SIDE;
+        // add new castling
+        h ^= Z_CASTLING[(newstate.castling_rights & 0x0F) as usize];
+
+        // add new EP (if any)
+        if newstate.ep_square != 64 {
+            h ^= Z_EP_FILE[file_of(newstate.ep_square)];
+        }
+
+        newstate.hash = h;
+
         let pin = movegen.getpinned(self);
         newstate.pinned = pin.0;
         newstate.pinners = pin.1;
@@ -340,6 +389,7 @@ impl Board {
 
         //update playerpieces
         self.playerpieces[us as usize] ^= (1<<ksrc) | (1<<kdst) | (1<<rsrc) | (1<<rdst);
+        
     }
     pub fn undo_castling(&mut self, ksrc: i8, rsrc: i8) {
         //if kingside castle, then put rook and king back on their starting squares
@@ -409,6 +459,7 @@ impl Board {
             attacked: [0; 2],
             prev: None,
             prev_move: Move::new(),  
+            hash: 0,
         };
 
         for c in pieces {
@@ -427,31 +478,9 @@ impl Board {
         
 
         let castling_rights = fields.next().unwrap();
-        let mut ep_sq = 0;
         let ep = fields.next().unwrap();
-        for (i, ch) in ep.chars().enumerate() {
-            if i == 0 {
-                //parse file
-                match ch {
-                    'a' => ep_sq += 0,
-                    'b' => ep_sq += 1,
-                    'c' => ep_sq += 2,
-                    'd' => ep_sq += 3,
-                    'e' => ep_sq += 4,
-                    'f' => ep_sq += 5,
-                    'g' => ep_sq += 6,
-                    'h' => ep_sq += 7,
-                    '-' => {}
-                    _ => panic!("Invalid ep square"),
-                };
-            } else {
-                if ch.to_digit(10).unwrap() as u8 == 3 {
-                    ep_sq += 16;
-                } else {
-                    ep_sq += 40;
-                }
-            }
-        }
+        state.ep_square = if ep == "-" { 64 } else { constlib::square_from_string(ep) };
+
         if color.chars().nth(0).unwrap() == 'w' {
             self.turn = 0;
         } else {
@@ -464,14 +493,38 @@ impl Board {
         state.pinners = pininfo.1;
 
         state.castling_rights = castling::get_castling_mask(castling_rights);
-        state.ep_square = ep_sq;
         
         state.attacked[self.turn as usize] = movegen::MoveGenerator::makeattackedmask(&mut movegen::MoveGenerator::new(),self,self.occupied);
 
+        state.hash = Self::compute_hash(self, &state);
 
         self.state = Arc::new(state);
     }
+    #[inline(always)]
+    fn file_of(sq: u8) -> usize { (sq & 7) as usize }
 
+    pub fn compute_hash(board: &crate::core::Board, state: &crate::core::BoardState) -> u64 {
+        use crate::core::zobrist::{Z_PIECE_SQ, Z_SIDE, Z_CASTLING, Z_EP_FILE};
+        use crate::core::constlib;
+
+        let mut h: u64 = 0;
+
+        for p in 0..12usize {
+            let mut bb = board.pieces[p];
+            while bb != 0 {
+                let sq = constlib::poplsb(&mut bb) as usize;
+                h ^= Z_PIECE_SQ[p][sq];
+            }
+        }
+
+        if board.turn == 1 { h ^= Z_SIDE; }
+        h ^= Z_CASTLING[(state.castling_rights & 0x0F) as usize];
+
+        if state.ep_square != 64 {
+            h ^= Z_EP_FILE[Self::file_of(state.ep_square)];
+        }
+        h
+    }
     pub fn set_startpos(&mut self) {
         self.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
     }

@@ -167,5 +167,12 @@ impl Move {
             3 | _ => PieceType::Q,
         }
     }
+    
+    #[inline(always)]
+    pub fn from_u16(data: u16) -> Self { Move { data } }
+
+    #[inline(always)]
+    pub fn as_u16(self) -> u16 { self.data() }
 }
+
 

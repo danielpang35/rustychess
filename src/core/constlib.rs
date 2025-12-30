@@ -19,7 +19,6 @@ pub const southeast: i8 = -7;
 /// Direction of going southwest on a chessboard.
 pub const southwest: i8 = -9;
 
-
 pub const PAWN_PST: [i16; 64] = [
       0,   0,   0,   0,   0,   0,   0,   0,
       10,  10,  10,  10,  10,  10,  10,   10,

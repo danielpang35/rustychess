@@ -76,7 +76,7 @@ pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator) {
             mv.print();
         }
         let mut searcher = search::Search::new();
-        let bm = searcher.search_iterative(board,6, generator);
+        let bm = searcher.search_iterative(board,7, generator).0;
         board.push(bm, generator);
         println!("Move applied: ");
         bm.print();
