@@ -74,6 +74,7 @@ impl MoveGenerator {
       let mut attacks = self.king[ind as usize];
       //access cached attacked array
       let kingdanger = board.state.attacked[board.turn as usize];
+      let kingdanger = self.makeattackedmask(board, board.occupied & !board.pieces[if board.turn == 0 { PieceIndex::K.index() } else { PieceIndex::k.index() }]);
       // if color == 1 {
       //   constlib::print_bitboard(kingdanger);
       // }
@@ -81,6 +82,7 @@ impl MoveGenerator {
       attacks &= !board.playerpieces[color as usize];
       while attacks != 0 {
         let dst = constlib::poplsb(&mut attacks);
+
         if (1 << dst) & board.playerpieces[them as usize] != 0 {
           movelist.push(Move::makeCapture(ind as u8,dst));
         } else {movelist.push(Move::makeQuiet(ind as u8,dst));}
@@ -287,14 +289,26 @@ impl MoveGenerator {
           attacks &= target.0 | target.1;
         }
         
-        //generate ep moves
+       //generate ep moves
         let ep = board.getep();
 
-        if(ep < 64) &&
-        (self.pawnattacks[color as usize][ind as usize] & (1u64<<ep) != 0) 
-        && (constlib::get_rank(ind as u8) != 2) && (constlib::get_rank(ind as u8) != 7)
-        
+        // En-passant is a special case for legality because removing the pawn from its
+        // original file can expose a discovered check on our own king (classic EP pin).
+        // Therefore we must apply *pin constraints* and a *self-check test*.
+        if (ep < 64)
+            && (self.pawnattacks[color as usize][ind as usize] & (1u64 << ep) != 0)
+            && (constlib::get_rank(ind as u8) != 2)
+            && (constlib::get_rank(ind as u8) != 7)
         {
+          // If this pawn is pinned, EP is only legal if the destination lies on the pin line.
+          if pinned & (1u64 << ind) != 0 {
+            let pin_line = self.line_between[ind as usize][kingsq as usize];
+            if (pin_line & (1u64 << ep)) == 0 {
+              // EP would move off the pin line -> illegal (would expose self-check).
+              continue;
+            }
+          }
+
           if evasions {
             let offset = if color == 0 {-8} else {8};
             if (1 << ep) & target.1 != 0{
@@ -304,13 +318,16 @@ impl MoveGenerator {
             }
           } else {
             let enemypawn = if color == 0 {ep - 8} else {ep + 8};
-            let blockers = board.occupied & !((1<<ind) | (1<<enemypawn)) | (1<<ep);
+            // Simulate EP occupancy for check detection:
+            // - remove the moving pawn from its source square
+            // - remove the captured pawn behind the EP square
+            // - add the pawn on the EP destination square
+            let blockers = (board.occupied & !((1u64 << ind) | (1u64 << enemypawn))) | (1u64 << ep);
             let checkers = self.getcheckers(board, blockers);
             if checkers == 0 {
               movelist.push(Move::makeEP(ind as u8, ep));
             }
           }
-
           
         }
         while attacks != 0 
@@ -541,6 +558,12 @@ impl MoveGenerator {
       let kingidx = if color == 0 {PieceIndex::K.index()} else {PieceIndex::k.index()};
       let mut attackers = 0;
       let mut king = board.pieces[kingidx];
+      if king == 0 {
+        println!("THERES NO KING IN GETCHECKERS");
+        debug_assert!(false, "King bitboard is 0 in getcheckers()");
+        board.print();
+        return 0;
+    }
       let kingsq = constlib::poplsb(&mut king) as i8;
       let pbb = board.pieces[(6*enemy+PieceIndex::P.index())];
       let nbb = board.pieces[(6*enemy+PieceIndex::N.index())];
@@ -550,6 +573,7 @@ impl MoveGenerator {
       let batt = constlib::compute_bishop(kingsq, blockers);
       let ratt = constlib::compute_rook(kingsq, blockers);
       
+
       attackers |= (self.pawnattacks[color as usize][kingsq as usize] & pbb)
                 |  (self.knight[kingsq as usize] & nbb) 
                 |  (batt & bbb)

@@ -86,12 +86,14 @@ fn square(props: &SquareProps) -> Html {
         Callback::from(move |_| onclick.emit(engine_sq))
     };
 
+    
     let piece_view = if let Some(src) = piece_svg(props.piece.as_str()) {
-        html! {
-            <img class="piece" src={src} draggable="false" />
-        }
+        // html! {
+        //     <img class="piece" src={src} draggable="false" />
+        // }
+        html! { <span class="piece-glyph">{ piece_to_glyph(props.piece.as_str()) }</span> }
     } else {
-        html! {}
+            html! { <span class="piece-glyph">{ piece_to_glyph(props.piece.as_str()) }</span> }
     };
 
     html! {
@@ -101,8 +103,19 @@ fn square(props: &SquareProps) -> Html {
     }
 }
 
+fn piece_to_glyph(p: &str) -> &'static str {
+    match p {
+        "P" => "♙", "N" => "♘", "B" => "♗", "R" => "♖", "Q" => "♕", "K" => "♔",
+        "p" => "♟", "n" => "♞", "b" => "♝", "r" => "♜", "q" => "♛", "k" => "♚",
+        _ => "",
+    }
+}
+
+
+
 #[function_component(App)]
 fn app() -> Html {
+
     // Outbound WS sender
     let tx = use_state(|| None::<UnboundedSender<Message>>);
 
@@ -153,6 +166,9 @@ fn app() -> Html {
         let last_from_effect = last_from.clone();
         let last_to_effect = last_to.clone();
         let prev_board_effect = prev_board.clone();
+
+        
+
         use_effect_with((), move |_| {
             let socket = WebSocket::open("ws://127.0.0.1:3000/ws").expect("failed to open ws");
             status_effect.set("connected".to_string());

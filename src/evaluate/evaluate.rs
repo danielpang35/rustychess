@@ -21,9 +21,7 @@ pub fn evaluate(board: &Board, mg: &MoveGenerator) -> i32 {
         let n = nbb.count_ones() as i32;
         let p = pbb.count_ones() as i32;
         
-        let mut mobility: i32 = 0;
 
-        let occ = board.occupied;
 
         // ---- Knights ----
         // ALSO GIVE BONUSES FOR CERTAIN SQUARES
@@ -40,9 +38,9 @@ pub fn evaluate(board: &Board, mg: &MoveGenerator) -> i32 {
             score += factor * pst_value(&PAWN_PST, sq, color);
         }
         let control = board.state.attacked[if board.turn == 0 {1} else {0}].count_ones() as i32;
-        score += control * 1; // very small weight
+        score += control * 1 * factor; // very small weight
 
-        score += factor * (100 * p + 320 * n + 350 * b + 500 * r + 900 * q );
+        score += factor * (100 * p + 300 * n + 330 * b + 500 * r + 900 * q );
         }
 
     

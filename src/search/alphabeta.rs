@@ -1,7 +1,8 @@
-use crate::core::{Board, Move, movegen::MoveGenerator, PieceIndex};
+use crate::core::{Board, Move, movegen::MoveGenerator, PieceIndex, constlib};
 use crate::evaluate::evaluate;
 use crate::search::Search;
 use crate::search::tt::{TT_EMPTY, TT_EXACT, TT_LOWER, TT_UPPER};
+
 
 const Mate: i32
     = 99999;
@@ -72,6 +73,15 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
     }
     search.order_moves_range(&mut moves, board, node_ply);
     for (i, m) in moves.iter().copied().enumerate() {
+        let enemy = if board.turn == 0 { 1 } else { 0 };
+        let enemy_king_idx = if enemy == 0 { PieceIndex::K.index() } else { PieceIndex::k.index() };
+        let mut kingbb = board.pieces[enemy_king_idx];
+        let enemy_king_sq = constlib::poplsb(&mut kingbb);
+
+        if m.getDst() == enemy_king_sq as u8 {
+            eprintln!("ABOUT TO PUSH KING-CAPTURE MOVE: from={} to={}", m.getSrc(), m.getDst());
+            // board.print();
+        }
         board.push(m, &generator);
         search.debug_after_push(board, generator, m);
 
@@ -79,9 +89,12 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
         
 
         // --- LMR: late quiet moves searched at reduced depth first ---
-        if depth >= 4 && !in_check && m.isquiet() && i>=4{
-            
-            // "Gives check?" using cached attacked (essentially free).
+
+                // --- LMR: late quiet moves searched at reduced depth first ---
+        if depth >= 4 && !in_check && m.isquiet() && i >= 4 {
+
+            // Robust "gives check" (see Patch 3): compute attacks by the mover.
+            // After push(), board.turn is the side-to-move (the opponent).
             let kingidx = if board.turn == 0 { PieceIndex::K.index() } else { PieceIndex::k.index() };
             let gives_check = (board.state.attacked[board.turn as usize] & board.pieces[kingidx]) != 0;
 
@@ -89,11 +102,13 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
                 // Never reduce checking moves.
                 score = -alphabeta(search, board, depth - 1, generator, -beta, -alpha);
             } else {
-                // Reduced-depth search
-                score = -alphabeta(search, board, depth - 2, generator, -beta, -alpha);
+                // Reduced-depth NULL-WINDOW search (critical fix)
+                // depth>=4 guarantees depth-2 is valid.
+                score = -alphabeta(search, board, depth - 2, generator, -alpha - 1, -alpha);
                 search.lmr_reductions += 1;
-                // Re-search if it looks interesting
-                if score > alpha - 25 {
+
+                // Re-search ONLY on fail-high (critical fix)
+                if score > alpha {
                     score = -alphabeta(search, board, depth - 1, generator, -beta, -alpha);
                     search.lmr_researches += 1;
                 }
@@ -101,6 +116,7 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
         } else {
             score = -alphabeta(search, board, depth - 1, generator, -beta, -alpha);
         }
+
 
 
         board.pop();
@@ -156,7 +172,7 @@ fn qsearch(
     if !in_check {
         let stand_pat = evaluate(board, generator);
         // If we are so far below alpha that even winning a queen can't help, prune.
-        const DELTA: i32 = 600; // queen value in your eval units (centipawns)
+        const DELTA: i32 = 900; // queen value in your eval units (centipawns)
         if stand_pat + DELTA < alpha {
             return alpha;
         }

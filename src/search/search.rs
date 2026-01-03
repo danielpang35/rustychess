@@ -160,6 +160,8 @@ pub fn search_iterative(
 
         final_best = best_move;
         final_score = best_score;
+        println!("Searched to depth {}: PV: ", depth);  
+        final_best.print();
     }
         println!(
     "nodes={} qnodes={} lmr_red={} lmr_re={} pvs_re={} aspL={} aspH={}",

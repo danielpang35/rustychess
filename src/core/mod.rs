@@ -121,6 +121,15 @@ impl Board {
             if capture {
                 
                 let capturedpiece = self.piecelocs.piece_at(to);
+                let prev_state = self.state.prev.as_ref().unwrap();
+                debug_assert!(
+                    capturedpiece.get_piece_type() != PieceType::K,
+                    "Illegal king capture in push(): {:?} {:?} \n Here is the current player's attacked: {:?} and {:?}",
+                    bm.print(),
+                    self.print(),
+                    constlib::print_bitboard(prev_state.attacked[enemy as usize]),
+                    constlib::print_bitboard(prev_state.attacked[self.turn as usize])
+                );
                 let capturedidx = if ep {6*enemy+PieceIndex::P.index()}
                     else {capturedpiece.getidx()};
                 let mut capsq = to;
@@ -226,12 +235,8 @@ impl Board {
         newstate.pinned = pin.0;
         newstate.pinners = pin.1;
         
-
+        newstate.attacked[self.turn as usize] = movegen.makeattackedmask(self, self.occupied);
         // newstate.attacked[white] = all squares which white attacks after the move has been pushed
-        let kingidx = if self.turn == 0 { PieceIndex::K.index() } else { PieceIndex::k.index() };
-        let blockers = self.occupied & !self.pieces[kingidx];
-        newstate.attacked[self.turn as usize] = movegen.makeattackedmask(self, blockers);
-
         
 
         newstate.prev = Some(Arc::clone(&self.state));
@@ -241,6 +246,31 @@ impl Board {
     
         assert!(!(self.state == *self.state.prev.as_ref().unwrap()));
         debug_assert_eq!(self.state.hash, Self::compute_hash(self, &self.state));
+        self.assert_kings_present();
+        // After push(), self.turn is the side to move (stm).
+        // The mover is the opposite side.
+        let stm = self.turn as u8;
+        let mover = stm ^ 1;
+
+        let mover_king_idx = if mover == 0 { PieceIndex::K.index() } else { PieceIndex::k.index() };
+        let mover_king_bb = self.pieces[mover_king_idx];
+
+        // Compute attacks by stm (enemy of mover) using your convention:
+        // makeattackedmask uses board.turn and attacks by enemy-of-turn.
+        let saved_turn = self.turn;
+        self.turn = mover; // enemy-of-turn = stm
+        let attacks_by_stm = movegen.makeattackedmask(self, self.occupied);
+        self.turn = saved_turn;
+
+        if (attacks_by_stm & mover_king_bb) != 0 {
+            eprintln!("ILLEGAL SELF-CHECK CREATED BY MOVE:");
+            bm.print();      // or print from/to/flags
+            self.print();    // your board printer
+            eprintln!("attacks_by_stm:");
+            constlib::print_bitboard(attacks_by_stm);
+            panic!("push() produced illegal position: mover king in check");
+        }
+
     }
 
     pub fn pop(&mut self) {
@@ -260,6 +290,8 @@ impl Board {
         
 
         let bm = self.state.prev_move;
+        debug_assert!(self.pieces[PieceIndex::K.index()] != 0 && self.pieces[PieceIndex::k.index()] != 0, "King missing at pop() entry");
+
         // println!("Undoing");
         // bm.print();
         //disect previous move
@@ -321,6 +353,7 @@ impl Board {
         self.state = previous;
         self.turn = color;
         self.ply -= 1;
+        self.assert_kings_present();
         return;
     }
 
@@ -355,6 +388,8 @@ impl Board {
     self.state = previous;
     self.turn = color;
     self.ply -= 1;
+    self.assert_kings_present();
+
     }
 
     pub fn apply_castling(&mut self, ksrc: i8, rsrc: i8) {
@@ -612,5 +647,11 @@ impl Board {
     debug_assert_eq!(out.len(), 64);
     debug_assert!(out.iter().all(|s| s.chars().count() == 1));
     out
+}
+
+#[inline(always)]
+pub fn assert_kings_present(&self) {
+    debug_assert!(self.pieces[PieceIndex::K.index()] != 0, "White king missing");
+    debug_assert!(self.pieces[PieceIndex::k.index()] != 0, "Black king missing");
 }
 }

@@ -285,12 +285,25 @@ background: radial-gradient(closest-side,
   transform: none;
   filter: none;
 }
+
+.piece-glyph {
+  font-size: 34px;
+  line-height: 1;
+  user-select: none;
+}
+
+.piece-img {
+  width: 90%;
+  height: 90%;
+  user-select: none;
+  pointer-events: none;
+}
 </style>
-  <link rel="modulepreload" href="/web-60b2bd8c9b007a35.js" crossorigin="anonymous" integrity="sha384-1KgH9981deBRPGHZGNrJmnA/cx3SRb6F2JdusZPZ2VCqVPQQLnqAOfmc+mBhhJD+"><link rel="preload" href="/web-60b2bd8c9b007a35_bg.wasm" crossorigin="anonymous" integrity="sha384-aU+DFKN6qS03BvL6Iv4tUcymB5DWXjYc0N9SFEs5YiXsqh0XfzUANsglJibMpgMV" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/web-4658da361e5441a3.js" crossorigin="anonymous"><link rel="preload" href="/web-4658da361e5441a3_bg.wasm" crossorigin="anonymous" as="fetch" type="application/wasm"></head>
   <body>
 <script type="module">
-import init, * as bindings from '/web-60b2bd8c9b007a35.js';
-const wasm = await init({ module_or_path: '/web-60b2bd8c9b007a35_bg.wasm' });
+import init, * as bindings from '/web-4658da361e5441a3.js';
+const wasm = await init({ module_or_path: '/web-4658da361e5441a3_bg.wasm' });
 
 
 window.wasmBindings = bindings;
