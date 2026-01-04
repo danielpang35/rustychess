@@ -2,7 +2,6 @@ use gloo_net::websocket::{futures::WebSocket, Message};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
-use gloo_timers::future::TimeoutFuture;
 use yew::classes;
 use web_sys::HtmlAudioElement;
 
@@ -130,32 +129,55 @@ fn app() -> Html {
 
     //audio
 
-    let cap_audio = use_mut_ref(|| {
-        let a = HtmlAudioElement::new().unwrap();
-        a.set_src("/assets/sounds/capture.mp3"); // or .wav
-        a.set_volume(0.4);
-        a
-    });
+    const POOL: usize = 4;
 
-    let move2_audio = use_mut_ref(|| {
-        let a = HtmlAudioElement::new().unwrap();
-        a.set_src("/assets/sounds/move2.mp3"); // or .wav
-        a.set_volume(0.70);
-        a
+    let cap_pool = use_mut_ref(|| {
+        let mut v = Vec::with_capacity(POOL);
+        for _ in 0..POOL {
+            let a = HtmlAudioElement::new().unwrap();
+            a.set_src("/assets/sounds/capture.mp3");
+            a.set_volume(0.4);
+            a.load(); // important for Safari
+            v.push(a);
+        }
+        v
     });
+    let cap_idx = use_mut_ref(|| 0usize);
+
+    let move_pool = use_mut_ref(|| {
+        let mut v = Vec::with_capacity(POOL);
+        for _ in 0..POOL {
+            let a = HtmlAudioElement::new().unwrap();
+            a.set_src("/assets/sounds/move2.mp3");
+            a.set_volume(0.70);
+            a.load(); // important for Safari
+            v.push(a);
+        }
+        v
+    });
+    let move_idx = use_mut_ref(|| 0usize);
+    let cap_pool_ws  = cap_pool.clone();
+    let cap_idx_ws   = cap_idx.clone();
+    let move_pool_ws = move_pool.clone();
+    let move_idx_ws  = move_idx.clone();
+
+    let move_pool_ui = move_pool.clone();
+    let cap_pool_ui = cap_pool.clone();
+
+
     // UI-only state
     let selected = use_state(|| None::<u8>);
     let status = use_state(|| "disconnected".to_string());
     let seq = use_state(|| 0u64); // increments on every received State (proves UI applied it)
-    use std::cell::RefCell;
-    use std::rc::Rc;
+
 
     let pending = use_mut_ref(|| None::<(u8, u8)>);    
     let last_from = use_state(|| None::<u8>);
     let last_to = use_state(|| None::<u8>);
     let prev_board = use_mut_ref(|| vec![".".to_string(); 64]);
 
-
+    // for audio 
+    let unlocked = use_state(|| false);
 
 
     // --- WebSocket connect once ---
@@ -170,7 +192,6 @@ fn app() -> Html {
         let last_to_effect = last_to.clone();
         let prev_board_effect = prev_board.clone();
 
-        
 
         use_effect_with((), move |_| {
             let socket = WebSocket::open("ws://127.0.0.1:3000/ws").expect("failed to open ws");
@@ -239,38 +260,27 @@ fn app() -> Html {
                                     }
                                     // 3) Resolve pending move + capture using `prev` (real board)
                                     if let Some((pf, pt)) = pending_for_task.borrow_mut().take() {
-                                        let from_piece = prev[pf as usize].as_str();
-                                        let to_before  = prev[pt as usize].as_str();
-                                        
-                                        let move2audio = move2_audio.borrow();
-                                        let _ = move2audio.set_current_time(0.0);
+                                        let to_before = prev[pt as usize].as_str();
 
+                                        let did_capture = !is_empty(to_before);
+                                        if did_capture {
+                                                let mut i = cap_idx_ws.borrow_mut();
+                                                let mut p = cap_pool_ws.borrow_mut();
+                                                play_from_pool(&mut p, &mut i);
+                                            }
 
-                                        let mut did_capture = !is_empty(to_before);
+                                            {
+                                                let mut i = move_idx_ws.borrow_mut();
+                                                let mut p = move_pool_ws.borrow_mut();
+                                                play_from_pool(&mut p, &mut i);
+                                            }
 
-                                        // (optional) EP check here...
 
                                         status_for_task.set(format!(
-                                            r#"cap={} pf={} pt={} from="{}" to_before="{}""#,
-                                            did_capture, pf, pt, from_piece, to_before
+                                            r#"cap={} pf={} pt={} to_before="{}""#,
+                                            did_capture, pf, pt, to_before
                                         ));
-
-                                        if did_capture {
-                                            // Play capture sound
-                                            let audio = cap_audio.borrow();
-                                            let _ = audio.set_current_time(0.0);
-                                            let _ = audio.play();
-                                            move2audio.set_volume(0.4);
-
-                                            spawn_local(async move {
-                                                TimeoutFuture::new(420).await;
-                                            });
-                                        }
-                                        let _ = move2audio.play();
-                                        move2audio.set_volume(0.7);
-
                                     }
-
                                     // 4) Now apply new state
                                     state_for_task.set(s.clone());
                                     selected_for_task.set(None);
@@ -334,47 +344,81 @@ fn app() -> Html {
 
     // Derived values for render (read directly from state)
     let sel = *selected;
-    let legal_moves = state.legal_moves.clone();
 
     let dests: Vec<u8> = sel
-        .map(|s| legal_moves.iter().filter(|m| m.from == s).map(|m| m.to).collect())
+        .map(|s| state.legal_moves.iter().filter(|m| m.from == s).map(|m| m.to).collect())
         .unwrap_or_default();
     
     let lf = *last_from;
     let lt = *last_to;
     
-    
     let on_square_click = {
-        let selected = selected.clone();
-        let pending = pending.clone();
-        let send_client = send_client.clone();
-        let status = status.clone();
-        let state_for_click = state.clone(); // <-- add this
+    let unlocked = unlocked.clone();
+    let move_pool = move_pool_ui.clone();
 
+    let selected = selected.clone();
+    let pending = pending.clone();
+    let send_client = send_client.clone();
+    let state_for_click = state.clone();
+    let last_from = last_from.clone();
+    let last_to = last_to.clone();
 
-        Callback::from(move |sq: u8| {
-            if state_for_click.thinking {
-                // Hard lock: ignore clicks while engine thinks
-                //keep selected tho
-                let current_sel = *selected;
-                return;
-            }
-            let current_sel = *selected;
-            
-
-            if let Some(from) = current_sel {
-                if let Some(mv) = legal_moves.iter().find(|m| m.from == from && m.to == sq) {
-                    *pending.borrow_mut() = Some((from, sq));
-                    last_from.set(Some(from));
-                    last_to.set(Some(sq));
-                    send_client.emit(ClientMsg::PlayMove { id: mv.id });
-                    return;
+    Callback::from(move |sq: u8| {
+        // --- Safari audio unlock (once) ---
+        if !*unlocked {
+            // Unlock using the first element in the move pool
+            {
+                let p = move_pool.borrow();
+                if !p.is_empty() {
+                    let a = &p[0];
+                    a.set_volume(0.0);
+                    play_now(a);
+                    a.pause().ok();
+                    a.set_current_time(0.0);
+                    a.set_volume(0.70);
+                }
+                {
+                let p = cap_pool.borrow();
+                if let Some(a) = p.first() {
+                    a.set_volume(0.0);
+                    play_now(a);
+                    a.pause().ok();
+                    a.set_current_time(0.0);
+                    a.set_volume(0.4);
                 }
             }
+            }
+            unlocked.set(true);
+        }
 
-            selected.set(Some(sq));
-        })
-    };
+        if state_for_click.thinking {
+            return;
+        }
+
+        let current_sel = *selected;
+
+        if let Some(from) = current_sel {
+            if let Some(mv) = state_for_click
+                .legal_moves
+                .iter()
+                .find(|m| m.from == from && m.to == sq)
+            {
+                *pending.borrow_mut() = Some((from, sq));
+                last_from.set(Some(from));
+                last_to.set(Some(sq));
+
+
+
+                send_client.emit(ClientMsg::PlayMove { id: mv.id });
+                return;
+            }
+        }
+
+        selected.set(Some(sq));
+    })
+};
+
+        
     let eval_text = match state.eval {
         Some(cp) => format!("evaluation: {:.2}", cp as f32 / 100.0),
         None => "evaluation: --".to_string(),
@@ -402,7 +446,7 @@ fn app() -> Html {
                 <div class="mono">  { format!("best_move: {:?}", state.best_move) }</div>
 
                 <div class="mono">{format!("thinking: {}", state.thinking)}</div>
-                <div class="mono">{format!("status: {}", (*status).clone())}</div>
+                //<div class="mono">{format!("status: {}", (*status).clone())}</div>
                 <div class="mono">{format!("turn: {}", if state.turn == 0 { "white" } else { "black" })}</div>
                 <div class="mono">{format!("state seq: {}", *seq)}</div>
 
@@ -448,7 +492,7 @@ fn app() -> Html {
         </div>
     }
 }
-
+    
 fn piece_svg(cell: &str) -> Option<&'static str> {
     match cell {
         "P" => Some("/assets/pieces/wp.svg"),
@@ -598,4 +642,43 @@ fn infer_last_move(prev: &[String], next: &[String]) -> Option<(u8, u8)> {
 
         _ => None,
     }
+}
+
+//because safari uses Promise which can be blocked
+use wasm_bindgen_futures::JsFuture;
+use web_sys::HtmlMediaElement;
+fn play_now(a: &HtmlAudioElement) {
+    // If it's already mid-play, don't seek; Safari queues seeks and drifts.
+    // Instead, rely on the pool to provide an idle element.
+    if a.paused() {
+        if let Ok(promise) = HtmlMediaElement::play(a) {
+            wasm_bindgen_futures::spawn_local(async move {
+                let _ = JsFuture::from(promise).await;
+            });
+        }
+    } else {
+        // If this element is busy, do nothing; pool selection should avoid this.
+        // (If you prefer, you can allow overlap by selecting another element.)
+    }
+}
+
+
+fn play_from_pool(pool: &mut [HtmlAudioElement], idx: &mut usize) {
+    if pool.is_empty() { return; }
+
+    // Prefer an idle element (paused == true).
+    for _ in 0..pool.len() {
+        let i = *idx % pool.len();
+        *idx = (*idx + 1) % pool.len();
+        if pool[i].paused() {
+            play_now(&pool[i]);
+            return;
+        }
+    }
+
+    // Fallback: all are playing; take the next one anyway (overlap allowed).
+    let i = *idx % pool.len();
+    *idx = (*idx + 1) % pool.len();
+    // Do NOT pause/seek; just attempt play (Safari will likely ignore if busy).
+    play_now(&pool[i]);
 }
