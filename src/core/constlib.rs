@@ -1,6 +1,7 @@
 
 pub use crate::core::movegen::MoveGenerator;
 pub use crate::core::Board;
+pub use crate::core::Move;
 /// Direction of going north on a chessboard.
 pub const north: i8 = 8;
 /// Direction of going south on a chessboard.
@@ -31,14 +32,14 @@ pub const PAWN_PST: [i16; 64] = [
 ];
 
 pub const KNIGHT_PST: [i16; 64] = [
-    -50, -40, -30, -30, -30, -30, -40, -50,
-    -40, -20,   0,   5,   5,   0, -20, -40,
-    -30,   5,  10,  15,  15,  10,   5, -30,
-    -30,   0,  15,  20,  20,  15,   0, -30,
-    -30,   5,  15,  20,  20,  15,   5, -30,
-    -30,   0,  10,  15,  15,  10,   0, -30,
-    -40, -20,   0,   0,   0,   0, -20, -40,
-    -50, -40, -30, -30, -30, -30, -40, -50,
+    -50, -30, -30, -30, -30, -30, -30, -50,
+    -30,  10,  10,  10,  10,  10,  10, -30,
+    -30,  10,  20,  35,  35,  20,  10, -30,
+    -30,  10,  20,  35,  35,  20,  10, -30,
+    -30,  10,  20,  35,  35,  20,  10, -30,
+    -30,  10,  20,  35,  35,  20,  10, -30,
+    -30,  10,  10,  10,  10,  10,  10, -30,
+    -50, -30, -30, -30, -30, -30, -30, -50,
 ];
 
 
@@ -82,9 +83,27 @@ pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64 {
       board.push(bm,mg);
       let moves = perft(board, depth - 1, mg);
       ct += moves;
-      board.pop();
+      board.pop(mg);
   }
   ct
+}
+
+pub fn perft_tracked(board: &mut Board, depth: u8, mg: &MoveGenerator, line: &mut Vec<Move>) -> u64 {
+    if depth == 0 { return 1; }
+
+    let ml = mg.generate(board);
+    let mut ct = 0u64;
+
+    for bm in ml {
+        line.push(bm);
+        board.push(bm, mg); // will panic with correct line if illegal
+
+        ct += perft_tracked(board, depth - 1, mg, line);
+
+        board.pop(mg);
+        line.pop();
+    }
+    ct
 }
 
 pub fn get_rank(square: u8) -> u8 {
@@ -129,7 +148,7 @@ pub fn print_bitboard(bitboard: u64) {
     for row in (0..8).rev() {
         for col in 0..8 {
             let square = row * 8 + col;
-            let mask = 1 << square;
+            let mask = 1u64 << square;
             let value = if (bitboard & mask) != 0 { "1" } else { "0" };
             print!("{} ", value);
         }
@@ -211,7 +230,7 @@ pub fn squarebb_from_string(square_str: &str) -> u64 {
 }
 pub fn squaretobb(square:u8) -> u64 {
   //helper to generate a one square bitboard from given square
-  1 << square
+  1u64 << square
 }
 pub fn squaretouci(square: u8) -> String {
   if square >= 64 {

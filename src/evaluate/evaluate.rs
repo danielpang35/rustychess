@@ -37,14 +37,15 @@ pub fn evaluate(board: &Board, mg: &MoveGenerator) -> i32 {
             let sq = constlib::poplsb(&mut pbb) as usize;
             score += factor * pst_value(&PAWN_PST, sq, color);
         }
-        let control = board.state.attacked[if board.turn == 0 {1} else {0}].count_ones() as i32;
-        score += control * 1 * factor; // very small weight
 
         score += factor * (100 * p + 300 * n + 330 * b + 500 * r + 900 * q );
         }
 
     
-
+    // let control = board.attacked[if board.turn == 0 {1} else {0}].count_ones() as i32;
+    // let enemy_control = board.attacked[board.turn as usize].count_ones() as i32;
+    // score -= enemy_control;
+    // score += control * 1; // very small weight
 
     score
 }

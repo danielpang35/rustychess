@@ -1,37 +1,42 @@
-pub use std::sync::Arc;
-pub use crate::core::r#move::Move;
-pub use super::piece::PieceType;
-#[derive(Clone, PartialEq)]
+use crate::core::piece::Piece;
+use crate::core::r#move::Move;
 
-pub struct BoardState {    
+/// Compact, allocation-free undo record for `Board::push()` / `Board::pop()`.
+///
+/// Stores only the previous values that cannot be derived when unmaking a move,
+/// plus captured-piece information (including EP capture square).
+#[derive(Copy, Clone, Debug)]
+pub struct Undo {
+    /// The move that was made and will be undone.
+    pub mv: Move,
+
+    /// Previous castling rights.
     pub castling_rights: u8,
+
+    /// Previous EP square (64 means none).
     pub ep_square: u8,
-    pub capturedpiece: PieceType,
-    pub pinned: u64, //friendly pieces
-    pub pinners: u64, //enemy pieces
-    pub attacked: [u64; 2], //  attacked[board.turn] == squares attacked by ENEMY
-    pub prev: Option<Arc<BoardState>>,
-    pub prev_move: Move,
+
+    /// Previous zobrist hash.
     pub hash: u64,
+
+    /// Captured piece identity (Piece::None if no capture).
+    pub captured_piece: Piece,
+
+    /// Square the captured piece came from (dst for normal captures, pawn square for EP).
+    /// 64 means no capture.
+    pub captured_sq: u8,
 }
 
-impl BoardState {
-    pub fn new() -> Self {
-        Self {    
-            castling_rights: 0,
-            ep_square: 64,
-            capturedpiece: PieceType::NONE,
-            pinned: 0, //friendly pieces
-            pinners: 0, //enemy pieces
-            attacked: [0; 2],
-            prev: None,
-            prev_move: Move::new(),  
-            hash: 0,
+impl Undo {
+    #[inline(always)]
+    pub fn new(mv: Move, castling_rights: u8, ep_square: u8, hash: u64) -> Self {
+        Self {
+            mv,
+            castling_rights,
+            ep_square,
+            hash,
+            captured_piece: Piece::None,
+            captured_sq: 64,
         }
     }
-    pub fn getpinned(&self, board: &crate::core::Board) -> (u64,u64) {
-        (self.pinned, self.pinners)
-    }
-
 }
-

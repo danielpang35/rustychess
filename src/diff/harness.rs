@@ -24,7 +24,7 @@ pub fn diff_fen(fen: &str, sf: &mut Stockfish) -> Result<(), DiffResult> {
 
     if our_moves != sf_moves {
         println!("FEN: {}", fen);
-        eprintln!("castling_rights bits: {:04b}", board.state.castling_rights);
+        eprintln!("castling_rights bits: {:04b}", board.castling_rights);
         let missing = sf_moves.difference(&our_moves).cloned().collect();
         let extra = our_moves.difference(&sf_moves).cloned().collect();
 

@@ -21,7 +21,7 @@ enum ServerMsg {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type")]
 enum ClientMsg {
-    NewGame,
+    NewGame{playerside: u8},
     PlayMove {id: u16},
 }
 #[derive(Debug, Deserialize, Clone)]
@@ -36,6 +36,9 @@ pub struct State {
     // NEW: engine evaluation (centipawns or mate score—see note below)
     #[serde(default)]
     pub eval: Option<i32>,
+
+    #[serde(default)]
+    pub best_move: Option<Move>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +59,6 @@ struct SquareProps {
     pub is_selected: bool,
     pub is_dest: bool,
     pub is_last: bool,
-    pub is_moved: bool,
     pub onclick: Callback<u8>,
 }
 
@@ -77,9 +79,7 @@ fn square(props: &SquareProps) -> Html {
         class.push("last");
     }
 
-    if props.is_moved {
-        class.push("moved");
-    }
+
     let engine_sq = props.engine_sq;
     let onclick = {
         let onclick = props.onclick.clone();
@@ -88,10 +88,9 @@ fn square(props: &SquareProps) -> Html {
 
     
     let piece_view = if let Some(src) = piece_svg(props.piece.as_str()) {
-        // html! {
-        //     <img class="piece" src={src} draggable="false" />
-        // }
-        html! { <span class="piece-glyph">{ piece_to_glyph(props.piece.as_str()) }</span> }
+        html! {
+            <img class="piece" src={src} draggable="false" />
+        }
     } else {
             html! { <span class="piece-glyph">{ piece_to_glyph(props.piece.as_str()) }</span> }
     };
@@ -126,6 +125,7 @@ fn app() -> Html {
         legal_moves: vec![],
         thinking: false,
         eval: None,
+        best_move: None,
     });
 
     //audio
@@ -150,9 +150,12 @@ fn app() -> Html {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    let pending = use_mut_ref(|| None::<(u8, u8)>);    let last_from = use_state(|| None::<u8>);
+    let pending = use_mut_ref(|| None::<(u8, u8)>);    
+    let last_from = use_state(|| None::<u8>);
     let last_to = use_state(|| None::<u8>);
     let prev_board = use_mut_ref(|| vec![".".to_string(); 64]);
+
+
 
 
     // --- WebSocket connect once ---
@@ -317,11 +320,15 @@ fn app() -> Html {
         })
     };
 
+    let player_side = use_state(|| 0u8); // 0 = white, 1 = black
+
     let on_new_game = {
         let send_client = send_client.clone();
+        let player_side = player_side.clone();
         Callback::from(move |_| {
-            send_client.emit(ClientMsg::NewGame);
-            // do not mutate board locally; wait for next State
+            send_client.emit(ClientMsg::NewGame {
+                playerside: *player_side,
+            });
         })
     };
 
@@ -343,15 +350,17 @@ fn app() -> Html {
         let send_client = send_client.clone();
         let status = status.clone();
         let state_for_click = state.clone(); // <-- add this
-        let legal_moves = if state.thinking { vec![] } else { state.legal_moves.clone() };
+
 
         Callback::from(move |sq: u8| {
             if state_for_click.thinking {
                 // Hard lock: ignore clicks while engine thinks
+                //keep selected tho
+                let current_sel = *selected;
                 return;
             }
-
             let current_sel = *selected;
+            
 
             if let Some(from) = current_sel {
                 if let Some(mv) = legal_moves.iter().find(|m| m.from == from && m.to == sq) {
@@ -370,15 +379,33 @@ fn app() -> Html {
         Some(cp) => format!("evaluation: {:.2}", cp as f32 / 100.0),
         None => "evaluation: --".to_string(),
     };
+
+
     html! {
         <div>
             <div class="row status">
                 <button onclick={on_new_game}>{"New Game"}</button>
                 <div class="mono">{eval_text}</div>
+                <button onclick={{
+                    let ps = player_side.clone();
+                    Callback::from(move |_| ps.set(0))
+                }}>{"Play White"}</button>
+
+                <button onclick={{
+                    let ps = player_side.clone();
+                    Callback::from(move |_| ps.set(1))
+                }}>{"Play Black"}</button>
+                
+                // <button class={hint_btn_class} onclick={on_toggle_hint}>
+                //     { if hint_on { "Engine Hint: ON" } else { "Engine Hint: OFF" } }
+                // </button>
+                <div class="mono">  { format!("best_move: {:?}", state.best_move) }</div>
+
                 <div class="mono">{format!("thinking: {}", state.thinking)}</div>
                 <div class="mono">{format!("status: {}", (*status).clone())}</div>
                 <div class="mono">{format!("turn: {}", if state.turn == 0 { "white" } else { "black" })}</div>
                 <div class="mono">{format!("state seq: {}", *seq)}</div>
+
             </div>
 
             <div class="board">
@@ -388,14 +415,18 @@ fn app() -> Html {
                         // UI: rank 8 at top, engine: a1=0
                         let file = ui_sq % 8;
                         let rank_from_top = ui_sq / 8;        // 0..7 top->bottom
-                        let engine_rank = 7 - rank_from_top;  // 7..0
-                        let engine_sq = engine_rank * 8 + file;
-
+                        let engine_sq = if *player_side == 0 {
+                            // White perspective
+                            (7 - rank_from_top) * 8 + file
+                        } else {
+                            // Black perspective (rotate 180 degrees)
+                            rank_from_top * 8 + (7 - file)
+                        };
                         let piece = state.board[engine_sq as usize].clone();
-                        
+                        let bm = state.best_move;
                         html! {
                             <Square
-                                key={engine_sq}                 // CRITICAL: stable per square
+                                key={ui_sq}                 // CRITICAL: stable per square
                                 engine_sq={engine_sq}
                                 ui_rank={rank_from_top}
                                 file={file}
@@ -403,9 +434,7 @@ fn app() -> Html {
                                 is_selected={Some(engine_sq) == sel}
                                 is_dest={dests.contains(&engine_sq)}
                                 is_last={Some(engine_sq) == lf || Some(engine_sq) == lt}
-                                is_moved={Some(engine_sq) == lt}
                                 onclick={on_square_click.clone()}
-                                
                             />
                         }
                     })

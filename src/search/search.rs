@@ -17,6 +17,8 @@ pub struct Search {
 
     pub tt_probes: u64,
     pub tt_hits: u64,
+    pub tt_key_hits: u64,
+    pub tt_cutoffs: u64,
     pub tt_exact: u64,
     pub tt_cut_lower: u64,
     pub tt_cut_upper: u64,
@@ -31,7 +33,7 @@ impl Search {
         let history = [[0i32; 64]; 64];
         Self { nodes: 0, qnodes: 0, lmr_reductions: 0, lmr_researches: 0, pvs_researches: 0, asp_fail_low: 0, asp_fail_high: 0, killers, history,
         tt: TranspositionTable::new_mb(128),
-        tt_probes: 0, tt_hits: 0, tt_exact: 0, tt_cut_lower: 0, tt_cut_upper: 0, tt_move_used: 0}
+        tt_probes: 0, tt_hits: 0, tt_key_hits: 0, tt_cutoffs: 0, tt_exact: 0, tt_cut_lower: 0, tt_cut_upper: 0, tt_move_used: 0}
     }
 
     pub fn search_root_yes(&mut self, board: &mut Board, depth: u8, mg: &MoveGenerator) -> (Move,i32) {
@@ -44,7 +46,7 @@ impl Search {
             board.push(m, &mg);
             //self.debug_after_push(board, mg, m);
             let score = -alphabeta(self, board,depth - 1, mg,-30000, 30000);
-            board.pop();
+            board.pop(mg);
             if score > best_score {
                 best_move = m;
                 best_score = score;
@@ -121,7 +123,7 @@ pub fn search_iterative(
                     s
                 };
 
-                board.pop();
+                board.pop(mg);
 
                 if score > best_score {
                     best_score = score;
@@ -169,10 +171,12 @@ pub fn search_iterative(
     self.pvs_researches, self.asp_fail_low, self.asp_fail_high
     );
     println!(
-    "TT: probes={} hits={} ({:.1}%) exact={} cutL={} cutU={} move_used={}",
+    "TT: probes={} hits={}  ({:.1}%) key_hits={} tt_cutoff={} exact={} cutL={} cutU={} move_used={} ",
     self.tt_probes,
     self.tt_hits,
     (self.tt_hits as f64 * 100.0) / self.tt_probes.max(1) as f64,
+    self.tt_key_hits,
+    self.tt_cutoffs,
     self.tt_exact,
     self.tt_cut_lower,
     self.tt_cut_upper,
@@ -230,7 +234,7 @@ pub fn search_iterative(
         // compiled out in release
     }
     //helper function which swaps the best move to the front if it exists
-    fn pv_first<T: PartialEq>(moves: &mut [T], pv: &T) {
+    pub fn pv_first<T: PartialEq>(moves: &mut [T], pv: &T) {
     if let Some(i) = moves.iter().position(|m| m == pv) {
         moves.swap(0, i);
     }

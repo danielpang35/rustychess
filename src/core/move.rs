@@ -32,7 +32,7 @@ const CP_MASK: u16 = 0b0100_000000_000000; //encodes a capture
 const FLAG_MASK: u16 = 0b1111_000000_000000;
 const SP_MASK: u16 = 0b0011_000000_000000; //encodes which piece to promote to. If not promotion, then this encodes castling or ep
 
-#[derive(Copy, Clone,PartialEq)]
+#[derive(Copy, Clone,PartialEq, Debug)]
 pub struct Move {
     data: u16,
 }
@@ -61,6 +61,11 @@ impl Move {
       let src = constlib::squaretouci(self.getSrc());
       let dst = constlib::squaretouci(self.getDst());
       println!("Move:\n{}{}",src, dst)
+    }
+    pub fn tostr(self) -> String{
+      let src = constlib::squaretouci(self.getSrc());
+      let dst = constlib::squaretouci(self.getDst());
+      format!("{}{}", src, dst)
     }
     pub fn movemasktoBitMoves(src: u8, movemask: &mut u64)-> Vec<Move>
       {
@@ -139,9 +144,10 @@ impl Move {
     pub fn iscapture(self) ->bool{
       return (self.data & CP_MASK) != 0;
     }
-    pub fn iscastle(self)->bool{
-
-      (self.data >> 13 ) == 1
+    #[inline(always)]
+    pub fn iscastle(self) -> bool {
+        let f = self.flag();
+        f == Move::FLAG_KING_CASTLE || f == Move::FLAG_QUEEN_CASTLE
     }
     pub fn iskingcastle(self)->bool{
       self.flag() == Move::FLAG_KING_CASTLE

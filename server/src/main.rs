@@ -29,7 +29,7 @@ async fn main() {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 enum ClientMsg {
-    NewGame,
+    NewGame {playerside: u8},
     SetPosition { fen: String },
     PlayMove { id: u16},
     
@@ -58,7 +58,11 @@ pub struct State {
     pub legal_moves: Vec<Move>,
     pub thinking: bool,            // NEW: UI disables interaction when true
     pub eval: Option<i32>,         // NEW: engine evaluation (centipawns or mate score)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub best_move: Option<Move>,
 }
+
+
 // ===== Axum entrypoint =====
 
 pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
@@ -75,10 +79,12 @@ async fn handle_socket(mut socket: WebSocket) {
     // Engine result channel: search task -> socket loop
     let (engine_tx, mut engine_rx) = mpsc::unbounded_channel::<(EngineMove, i32)>();
 
+    // (depth, move, score, thinking_flag_for_state)
+    let mut playerside: u8 = 0;
     let mut thinking = false;
 
     // Initial state
-    if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, thinking, Some(0))))
+    if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, thinking, Some(0), None)))
         .await
         .is_err()
     {
@@ -90,17 +96,37 @@ async fn handle_socket(mut socket: WebSocket) {
             // 1) Engine finished thinking
             maybe_best = engine_rx.recv() => {
                 let Some((best_move, best_score)) = maybe_best else { return; };
+                
+
+                // // 1) Send a hint/update BEFORE mutating the board
+                // let hint_state = make_state(
+                //     &mut board,
+                //     &movegen,
+                //     true,                    // thinking
+                //     Some(best_score),         // eval
+                //     Some(best_move),          // best_move (EngineMove)
+                // );
+
+                // if send_json(&mut socket, &ServerMsg::State(hint_state)).await.is_err() {
+                //     return;
+                // }
+
+
 
                 board.push(best_move, &movegen);
                 thinking = false;
+                let final_state = make_state(
+                    &mut board,
+                    &movegen,
+                    thinking,                   // thinking
+                    Some(best_score),         // keep eval if you want
+                    None,                     // clear hint after move
+                );
 
-                // include eval in State here
-                let msg = ServerMsg::State(make_state(&mut board, &movegen, thinking, Some(best_score)));
-                if send_json(&mut socket, &msg).await.is_err() {
+                if send_json(&mut socket, &ServerMsg::State(final_state)).await.is_err() {
                     return;
                 }
             }
-
             // 2) Incoming websocket frames
             maybe_frame = socket.recv() => {
                 let Some(Ok(frame)) = maybe_frame else {
@@ -112,21 +138,49 @@ async fn handle_socket(mut socket: WebSocket) {
                         let parsed: Result<ClientMsg, serde_json::Error> = serde_json::from_str(&text);
 
                         match parsed {
-                            Ok(ClientMsg::NewGame) => {
+                            Ok(ClientMsg::NewGame {playerside}) => {
                                 if thinking {
                                     // Optional: ignore or allow cancel. Keeping it strict for now.
                                     let _ = send_json(&mut socket, &ServerMsg::Error { message: "Engine is thinking".to_string() }).await;
                                     continue;
                                 }
+                                thinking = false;
                                 board = Board::new();
                                 board.set_startpos();
-                                let text = serde_json::to_string(&ServerMsg::State(make_state(&mut board, &movegen, thinking, None))).unwrap();
+                                let text = serde_json::to_string(&ServerMsg::State(make_state(&mut board, &movegen, thinking, None, None))).unwrap();
                                 println!("SENT: {}", text);
-                                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false, None)))
+                                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false, None, None)))
                                     .await
                                     .is_err()
                                 {
                                     return;
+                                }
+
+                                //if playerside is black
+                                if playerside == 1 {
+                                    thinking = true;
+                                    if send_json(&mut socket,
+                                        &ServerMsg::State(make_state(&mut board, &movegen, true, None, None))
+                                    ).await.is_err() {
+                                        return;
+                                    }
+
+                                    let tx = engine_tx.clone();
+                                    let mut board_for_search = board.clone_position();
+                                    let depth: u8 = 7;
+                                    let searcher = searcher.clone();
+
+                                    tokio::spawn(async move {
+                                        let best = tokio::task::spawn_blocking(move || {
+                                            let mg = MoveGenerator::new();
+                                            let mut s = searcher.lock().unwrap();
+                                            s.search_root(&mut board_for_search, depth, &mg)
+                                        }).await;
+
+                                        if let Ok((mv, score)) = best {
+                                            let _ = tx.send((mv, score));
+                                        }
+                                    });
                                 }
                             }
 
@@ -138,7 +192,7 @@ async fn handle_socket(mut socket: WebSocket) {
                                 board = Board::new();
                                 board.from_fen(fen);
 
-                                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false, None)))
+                                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false, None, None)))
                                     .await
                                     .is_err()
                                 {
@@ -160,7 +214,7 @@ async fn handle_socket(mut socket: WebSocket) {
                                 let Some(player_move) = legal.get(id as usize).copied() else {
                                     let _ = send_json(&mut socket, &ServerMsg::MoveResult { ok: false, reason: "Illegal move id".to_string() }).await;
                                     // Re-send state for UI consistency
-                                    let _ = send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false, None))).await;
+                                    let _ = send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false, None, None))).await;
                                     continue;
                                 };
 
@@ -177,7 +231,7 @@ async fn handle_socket(mut socket: WebSocket) {
 
                                 // Immediately send state with thinking=true (locks UI)
                                 thinking = true;
-                                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, true, None)))
+                                if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, true, None, None)))
                                     .await
                                     .is_err()
                                 {
@@ -187,7 +241,7 @@ async fn handle_socket(mut socket: WebSocket) {
                                 // Spawn search to full depth (blocking)
                                 // IMPORTANT: we clone the board for search so we don't race the authoritative board.
                                 let tx = engine_tx.clone();
-                                let mut board_for_search = board.clone();
+                                let mut board_for_search = board.clone_position();
                                 let depth: u8 = 7;            // hardcode for now; add to protocol later
                                 let searcher = searcher.clone();
                                 tokio::spawn(async move {
@@ -268,7 +322,7 @@ fn normalize_board_cells(cells: Vec<String>) -> Result<Vec<String>, String> {
         trimmed.len(),
         trimmed.get(0..std::cmp::min(trimmed.len(), 12))
     ))
-}fn make_state(board: &mut Board, movegen: &MoveGenerator, thinking: bool, eval: Option<i32>) -> State {
+}fn make_state(board: &mut Board, movegen: &MoveGenerator, thinking: bool, eval: Option<i32>, best_move: Option<EngineMove>) -> State {
     let raw = board.board_to_chars();
     let board_cells = normalize_board_cells(raw).expect("bad board_to_chars");
 
@@ -310,10 +364,31 @@ fn normalize_board_cells(cells: Vec<String>) -> Result<Vec<String>, String> {
         legal_moves,
         thinking,
         eval,
+        best_move: best_move.map(engine_move_to_ui),
     }
 }
 async fn send_json(socket: &mut WebSocket, msg: &ServerMsg) -> Result<(), ()> {
     let text = serde_json::to_string(msg).map_err(|_| ())?;
     
     socket.send(Message::Text(text.into())).await.map_err(|_| ())
+}
+fn engine_move_to_ui(m: rustychess::core::Move) -> Move {
+    let promo = if m.isprom() {
+        Some(match m.prompiece() {
+            PieceType::N => 'n',
+            PieceType::B => 'b',
+            PieceType::R => 'r',
+            PieceType::Q => 'q',
+            _ => 'q',
+        })
+    } else {
+        None
+    };
+
+    Move {
+        id: 0,
+        from: m.getSrc(),
+        to: m.getDst(),
+        promo,
+    }
 }

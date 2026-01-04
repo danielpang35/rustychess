@@ -298,6 +298,30 @@ background: radial-gradient(closest-side,
   user-select: none;
   pointer-events: none;
 }
+
+.btn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.btn:active { transform: scale(0.98); }
+
+.btn-off {
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.85);
+}
+
+.btn-on {
+  background: rgba(80, 200, 120, 0.25);
+  border-color: rgba(80, 200, 120, 0.55);
+  color: rgba(255,255,255,0.95);
+  box-shadow: 0 0 0 2px rgba(80, 200, 120, 0.20) inset;
+}
 </style>
   </head>
   <body></body>
