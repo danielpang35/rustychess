@@ -1,6 +1,8 @@
-use crate::core::{Board, PieceIndex, constlib, movegen::MoveGenerator};
+use crate::core::{constlib, movegen::MoveGenerator, Board, PieceIndex};
 use crate::evaluate::evaluate::constlib::KNIGHT_PST;
 use crate::evaluate::evaluate::constlib::PAWN_PST;
+use crate::perf;
+use std::time::Instant;
 pub fn evaluate(board: &Board, mg: &MoveGenerator) -> i32 {
     let mut score: i32 = 0;
 
@@ -20,15 +22,12 @@ pub fn evaluate(board: &Board, mg: &MoveGenerator) -> i32 {
         let b = bbb.count_ones() as i32;
         let n = nbb.count_ones() as i32;
         let p = pbb.count_ones() as i32;
-        
-
 
         // ---- Knights ----
         // ALSO GIVE BONUSES FOR CERTAIN SQUARES
         while nbb != 0 {
             let sq = constlib::poplsb(&mut nbb) as usize;
             score += factor * pst_value(&KNIGHT_PST, sq, color);
-
         }
 
         // ---- Pawns (captures only) ----
@@ -38,10 +37,9 @@ pub fn evaluate(board: &Board, mg: &MoveGenerator) -> i32 {
             score += factor * pst_value(&PAWN_PST, sq, color);
         }
 
-        score += factor * (100 * p + 300 * n + 330 * b + 500 * r + 900 * q );
-        }
+        score += factor * (100 * p + 300 * n + 330 * b + 500 * r + 900 * q);
+    }
 
-    
     // let control = board.attacked[if board.turn == 0 {1} else {0}].count_ones() as i32;
     // let enemy_control = board.attacked[board.turn as usize].count_ones() as i32;
     // score -= enemy_control;
@@ -62,5 +60,8 @@ use crate::evaluate::Nnue;
 
 #[inline(always)]
 pub fn evaluate_neural(board: &Board, nnue: &Nnue) -> i32 {
-    nnue.eval_cp_like(board)
+    let start = Instant::now();
+    let score = nnue.eval_cp_like(board);
+    perf::record_eval_neural(start.elapsed());
+    score
 }
