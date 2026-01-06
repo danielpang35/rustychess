@@ -651,6 +651,9 @@ fn play_now(a: &HtmlAudioElement) {
     // If it's already mid-play, don't seek; Safari queues seeks and drifts.
     // Instead, rely on the pool to provide an idle element.
     if a.paused() {
+        // Always rewind before replaying so subsequent sounds aren't silent when
+        // the element is parked at the end of the clip.
+        let _ = a.set_current_time(0.0);
         if let Ok(promise) = HtmlMediaElement::play(a) {
             wasm_bindgen_futures::spawn_local(async move {
                 let _ = JsFuture::from(promise).await;
