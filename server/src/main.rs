@@ -174,7 +174,7 @@ async fn handle_socket(mut socket: WebSocket) {
 
                                     let tx = engine_tx.clone();
                                     let mut board_for_search = board.clone_position();
-                                    let depth: u8 = 7;
+                                    let depth: u8 = 5;
                                     let searcher = searcher.clone();
 
                                     tokio::spawn(async move {
@@ -255,7 +255,7 @@ async fn handle_socket(mut socket: WebSocket) {
                                 // IMPORTANT: we clone the board for search so we don't race the authoritative board.
                                 let tx = engine_tx.clone();
                                 let mut board_for_search = board.clone_position();
-                                let depth: u8 = 5;            // hardcode for now; add to protocol later
+                                let depth: u8 = 7;            // hardcode for now; add to protocol later
                                 let searcher = searcher.clone();
                                 tokio::spawn(async move {
                                     let best: Result<(EngineMove, i32), tokio::task::JoinError> =
