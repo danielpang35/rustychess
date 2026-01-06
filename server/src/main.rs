@@ -74,7 +74,7 @@ use tokio::sync::mpsc;
 async fn handle_socket(mut socket: WebSocket) {
     let movegen = MoveGenerator::new();
     let mut board = Board::new();
-    let searcher = Arc::new(Mutex::new(Search::new()));
+    let searcher = Arc::new(Mutex::new(Search::new(false)));
     //init neural network
     {
         board.set_startpos(&searcher.lock().unwrap().nnue);

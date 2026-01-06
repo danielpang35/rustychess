@@ -62,7 +62,7 @@ fn main() {
     
     let mg = movegen::MoveGenerator::new();
     use std::time::Instant;
-    let mut search = Search::new();
+    let mut search = Search::new(false);
     board.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"), &search.nnue);
 
     cli::interactive_cli(&mut board, &mg, &search.nnue);
