@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use rustychess::core::movegen::MoveGenerator;
 use rustychess::core::{Board, Move as EngineMove, PieceType};
 
+use rustychess::evaluate::evaluate;
 use rustychess::search::Search;
 // ===== Your protocol types (as discussed) =====
 use axum::{routing::get, Router};
@@ -74,7 +75,10 @@ async fn handle_socket(mut socket: WebSocket) {
     let movegen = MoveGenerator::new();
     let mut board = Board::new();
     let searcher = Arc::new(Mutex::new(Search::new()));
-    board.set_startpos();
+    //init neural network
+    {
+        board.set_startpos(&searcher.lock().unwrap().nnue);
+    }
 
     // Engine result channel: search task -> socket loop
     let (engine_tx, mut engine_rx) = mpsc::unbounded_channel::<(EngineMove, i32)>();
@@ -111,17 +115,15 @@ async fn handle_socket(mut socket: WebSocket) {
                 //     return;
                 // }
 
-
-
-                board.push(best_move, &movegen);
-                thinking = false;
-                let final_state = make_state(
-                    &mut board,
-                    &movegen,
-                    thinking,                   // thinking
-                    Some(best_score),         // keep eval if you want
-                    None,                     // clear hint after move
-                );
+                eprintln!("SERVER SEND eval_cp={}", -best_score);
+                let final_state = {
+                    let mut s = searcher.lock().unwrap();
+                    board.push(best_move, &movegen, &s.nnue);
+                    let nn = s.nnue.eval_cp_like(&board);
+                    eprintln!("NNUE eval after push: {}", nn);
+                    thinking = false;
+                    make_state(&mut board, &movegen, thinking, Some(best_score), None)
+                }; // 🔴 lock dropped HERE
 
                 if send_json(&mut socket, &ServerMsg::State(final_state)).await.is_err() {
                     return;
@@ -146,7 +148,12 @@ async fn handle_socket(mut socket: WebSocket) {
                                 }
                                 thinking = false;
                                 board = Board::new();
-                                board.set_startpos();
+
+                                let searcher_cloned = searcher.clone();
+                                {
+                                    let mut s = searcher.lock().unwrap();
+                                    board.set_startpos(&s.nnue);
+                                }
                                 let text = serde_json::to_string(&ServerMsg::State(make_state(&mut board, &movegen, thinking, None, None))).unwrap();
                                 println!("SENT: {}", text);
                                 if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false, None, None)))
@@ -175,11 +182,10 @@ async fn handle_socket(mut socket: WebSocket) {
                                             let mg = MoveGenerator::new();
                                             let mut s = searcher.lock().unwrap();
                                             s.search_root(&mut board_for_search, depth, &mg)
-                                        }).await;
+                                        }).await.unwrap();
+                                        let (mv, score) = best;
+                                        let _ = tx.send((mv, score));
 
-                                        if let Ok((mv, score)) = best {
-                                            let _ = tx.send((mv, score));
-                                        }
                                     });
                                 }
                             }
@@ -190,8 +196,11 @@ async fn handle_socket(mut socket: WebSocket) {
                                     continue;
                                 }
                                 board = Board::new();
-                                board.from_fen(fen);
-
+                                let searcher = searcher.clone();
+                                {
+                                    let mut s = searcher.lock().unwrap();
+                                    board.from_fen(fen, &s.nnue);
+                                }
                                 if send_json(&mut socket, &ServerMsg::State(make_state(&mut board, &movegen, false, None, None)))
                                     .await
                                     .is_err()
@@ -219,9 +228,13 @@ async fn handle_socket(mut socket: WebSocket) {
                                 };
 
                                 // Apply player move
-                                board.push(player_move, &movegen);
+                                {
+                                    let mut s = searcher.lock().unwrap();
+                                    board.push(player_move, &movegen, &s.nnue);
+                                    let nn = s.nnue.eval_cp_like(&board);
+                                    eprintln!("NNUE eval after push: {}", nn);
+                                } // 🔴 lock dropped
 
-                                // Acknowledge
                                 if send_json(&mut socket, &ServerMsg::MoveResult { ok: true, reason: String::new() })
                                     .await
                                     .is_err()
@@ -242,7 +255,7 @@ async fn handle_socket(mut socket: WebSocket) {
                                 // IMPORTANT: we clone the board for search so we don't race the authoritative board.
                                 let tx = engine_tx.clone();
                                 let mut board_for_search = board.clone_position();
-                                let depth: u8 = 7;            // hardcode for now; add to protocol later
+                                let depth: u8 = 5;            // hardcode for now; add to protocol later
                                 let searcher = searcher.clone();
                                 tokio::spawn(async move {
                                     let best: Result<(EngineMove, i32), tokio::task::JoinError> =

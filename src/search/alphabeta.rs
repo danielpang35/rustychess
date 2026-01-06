@@ -1,5 +1,5 @@
 use crate::core::{Board, Move, movegen::MoveGenerator, PieceIndex, constlib};
-use crate::evaluate::evaluate;
+use crate::evaluate::{evaluate,evaluate_neural};
 use crate::search::Search;
 use crate::search::tt::{TT_EMPTY, TT_EXACT, TT_LOWER, TT_UPPER};
 
@@ -89,7 +89,7 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
             eprintln!("ABOUT TO PUSH KING-CAPTURE MOVE: from={} to={}", m.getSrc(), m.getDst());
             // board.print();
         }
-        board.push(m, &generator);
+        board.push(m, &generator, &search.nnue);
         search.debug_after_push(board, generator, m);
 
         let mut score: i32;
@@ -126,7 +126,7 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
 
 
 
-        board.pop(generator);
+        board.pop(generator, &search.nnue);
 
         if score >= beta {
             search.store_killer(node_ply, m);
@@ -171,14 +171,15 @@ fn qsearch(
     search.qnodes += 1;
     const QPLY_MAX: u8 = 8;
     if qply >= QPLY_MAX {
-        return evaluate(board, generator);
+        // return evaluate(board, generator);
+        return evaluate_neural(board, &search.nnue);
     }
 
     // If we're in check, we must search evasions; stand-pat is illegal.
     let in_check = generator.in_check(board);
     let mut stand_pat_opt: Option<i32> = None;
     if !in_check {
-        let stand_pat = evaluate(board, generator);
+        let stand_pat = evaluate_neural(board, &search.nnue);
         stand_pat_opt = Some(stand_pat);
 
         // If we are so far below alpha that even winning a queen can't help, prune.
@@ -295,11 +296,11 @@ fn qsearch(
                 }
             }
         }
-        board.push(m, generator);
+        board.push(m, generator, &search.nnue);
 
         let score = -qsearch(search, board, generator, -beta, -alpha, qply + 1);
 
-        board.pop(generator);
+        board.pop(generator, &search.nnue);
 
         if score >= beta {
             return beta; // fail-hard

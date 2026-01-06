@@ -17,6 +17,8 @@ pub use r#move::Move;
 pub use castling::CastlingRights;
 pub use state::Undo;
 
+pub use crate::evaluate::nnue::Nnue;
+use crate::evaluate::nnue::{nnue_add_piece,nnue_sub_piece};
 use crate::core::zobrist::{Z_PIECE_SQ, Z_SIDE, Z_CASTLING, Z_EP_FILE};
 
 // a struct defining the physical aspects of the board
@@ -42,6 +44,9 @@ pub struct Board {
     pub history: Vec<Undo>,
 
     pub ply: u16,
+    pub nnue_acc_w: [i32; 256],
+    pub nnue_acc_b: [i32; 256],
+    pub nnue_inited: bool,
 }
 
 impl Board {
@@ -64,6 +69,9 @@ impl Board {
             history: Vec::new(),
 
             ply: 0,
+            nnue_acc_b: [0; 256],
+            nnue_acc_w: [0; 256],
+            nnue_inited: false,
         }
     }
 
@@ -86,6 +94,9 @@ impl Board {
 
             history: Vec::new(),   // key point: new empty stack
             ply: self.ply,
+            nnue_acc_w: self.nnue_acc_w,
+            nnue_acc_b: self.nnue_acc_b,
+            nnue_inited: self.nnue_inited,
         }
     }
     #[inline(always)]
@@ -93,7 +104,7 @@ impl Board {
         (sq & 7) as usize
     }
 
-    pub fn push(&mut self, bm: Move, movegen: &movegen::MoveGenerator) {
+    pub fn push(&mut self, bm: Move, movegen: &movegen::MoveGenerator, nnue: &Nnue) {
         let color = self.turn;
         let enemy = color ^ 1;
 
@@ -109,7 +120,10 @@ impl Board {
         assert!(piece != Piece::None);
 
         // ---- save undo (previous true state) ----
-        let mut undo = Undo::new(bm, self.castling_rights, self.ep_square, self.hash);
+        if !self.nnue_inited {
+            self.nnue_rebuild(nnue);
+        }
+        let mut undo = Undo::new(bm, self.castling_rights, self.ep_square, self.hash, self.nnue_acc_w, self.nnue_acc_b);
 
         // ---- incremental zobrist: start from previous hash and remove old EP/castling ----
         let old_castle = self.castling_rights;
@@ -247,12 +261,101 @@ impl Board {
         // self.pinners = pin.1;
         // self.attacked[self.turn as usize] = movegen.makeattackedmask(self, self.occupied);
 
-        // ---- finalize ----
-        self.history.push(undo);
+
+        // ---- NNUE INCREMENTAL ACC update ----
+        // Assumes self.nnue_acc_w / self.nnue_acc_b currently represent the PRE-move position
+        // (we ensured initialization + created Undo snapshot before making changes).
+
+        let mover_is_king = piece.get_piece_type() == PieceType::K;
+
+        if castle || mover_is_king {
+            // HalfKP depends on king square: easiest correct rule is rebuild on king moves / castling.
+            self.nnue_rebuild(nnue);
+        } else {
+            let wk_sq = self.pieces[PieceIndex::K.index()].trailing_zeros() as usize;
+            let bk_sq = self.pieces[6 + PieceIndex::K.index()].trailing_zeros() as usize;
+
+            let mover_idx = piece.getidx();
+
+            if prom {
+                // Promotion: pawn(from) removed, promoted(to) added, plus capture removed if any.
+                nnue_sub_piece(
+                    nnue,
+                    &mut self.nnue_acc_w,
+                    &mut self.nnue_acc_b,
+                    wk_sq,
+                    bk_sq,
+                    mover_idx,
+                    from as usize,
+                );
+
+                if undo.captured_piece != Piece::None {
+                    nnue_sub_piece(
+                        nnue,
+                        &mut self.nnue_acc_w,
+                        &mut self.nnue_acc_b,
+                        wk_sq,
+                        bk_sq,
+                        undo.captured_piece.getidx(),
+                        undo.captured_sq as usize,
+                    );
+                }
+
+                let prompiece = bm.prompiece().to_piece(color);
+                nnue_add_piece(
+                    nnue,
+                    &mut self.nnue_acc_w,
+                    &mut self.nnue_acc_b,
+                    wk_sq,
+                    bk_sq,
+                    prompiece.getidx(),
+                    to as usize,
+                );
+            } else {
+                // Normal move: mover from->to
+                nnue_sub_piece(
+                    nnue,
+                    &mut self.nnue_acc_w,
+                    &mut self.nnue_acc_b,
+                    wk_sq,
+                    bk_sq,
+                    mover_idx,
+                    from as usize,
+                );
+                nnue_add_piece(
+                    nnue,
+                    &mut self.nnue_acc_w,
+                    &mut self.nnue_acc_b,
+                    wk_sq,
+                    bk_sq,
+                    mover_idx,
+                    to as usize,
+                );
+
+                // Capture (including EP): remove captured at captured_sq
+                if undo.captured_piece != Piece::None {
+                    nnue_sub_piece(
+                        nnue,
+                        &mut self.nnue_acc_w,
+                        &mut self.nnue_acc_b,
+                        wk_sq,
+                        bk_sq,
+                        undo.captured_piece.getidx(),
+                        undo.captured_sq as usize,
+                    );
+                }
+            }
+        }
+
         {
             let recomputed = Self::compute_hash(self); // rebuild from pieces + side + rights + ep
             assert_eq!(self.hash, recomputed, "Zobrist mismatch after push/pop");
         }
+
+        
+        // ---- finalize ----
+        self.history.push(undo);
+
         #[cfg(debug_assertions)]
 self.debug_validate();
         // ---------DEBUG ONLY MODE -=---------
@@ -282,7 +385,7 @@ self.debug_validate();
 
     }
 
-    pub fn pop(&mut self, movegen: &movegen::MoveGenerator) {
+    pub fn pop(&mut self, movegen: &movegen::MoveGenerator, nnue: &Nnue) {
         let undo = match self.history.pop() {
             Some(u) => u,
             None => {
@@ -379,6 +482,10 @@ self.debug_validate();
         self.turn = color;
         self.ply -= 1;
 
+
+        self.nnue_acc_w = undo.nnue_acc_w;
+        self.nnue_acc_b = undo.nnue_acc_b;
+        self.nnue_inited = true;
         // Refresh derived caches
         // let pin = movegen.getpinned(self);
         // self.pinned = pin.0;
@@ -454,7 +561,7 @@ self.debug_validate();
     pub fn getep(&self) -> u8 { self.ep_square }
 
     // creates board from fen string
-    pub fn from_fen(&mut self, fen: String) {
+    pub fn from_fen(&mut self, fen: String, nnue: &Nnue) {
         let mut fields = fen.split(" ");
         let pieces = fields.next().unwrap().chars();
         let mut rank: usize = 7;
@@ -483,6 +590,9 @@ self.debug_validate();
         self.turn = if color.chars().next().unwrap() == 'w' { 0 } else { 1 };
         self.castling_rights = castling::get_castling_mask(castling_rights);
 
+        self.nnue_inited = false;
+        self.nnue_rebuild(nnue);
+
         // initialize caches and hash
         let mg = movegen::MoveGenerator::new();
         let pininfo = mg.getpinned(self);
@@ -490,6 +600,7 @@ self.debug_validate();
         self.pinners = pininfo.1;
         self.attacked[self.turn as usize] = mg.makeattackedmask(self, self.turn, self.occupied);
         self.hash = Self::compute_hash(self);
+
     }
 
     pub fn compute_hash(board: &crate::core::Board) -> u64 {
@@ -515,8 +626,8 @@ self.debug_validate();
         h
     }
 
-    pub fn set_startpos(&mut self) {
-        self.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+    pub fn set_startpos(&mut self, nnue: &Nnue) {
+        self.from_fen(String::from("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"), nnue);
     }
 
     pub fn put_piece(&mut self, ch: char, rank: usize, file: usize) {
@@ -639,4 +750,26 @@ pub fn debug_validate(&self) {
         }
     }
 }
+    pub fn nnue_rebuild(&mut self, nnue: &crate::evaluate::nnue::Nnue) {
+        // Copy bias into both accumulators
+        self.nnue_acc_w = nnue.b1;
+        self.nnue_acc_b = nnue.b1;
+
+        let wk_sq = self.pieces[PieceIndex::K.index()].trailing_zeros() as usize;
+        let bk_sq = self.pieces[6 + PieceIndex::K.index()].trailing_zeros() as usize;
+        for i in 0..256 {
+            self.nnue_acc_w[i] = nnue.b1[i];
+            self.nnue_acc_b[i] = nnue.b1[i];
+        }
+        for piece_idx in 0..12usize {
+            let mut bb = self.pieces[piece_idx];
+            while bb != 0 {
+                let sq = constlib::poplsb(&mut bb) as usize;
+                nnue_add_piece(nnue, &mut self.nnue_acc_w, &mut self.nnue_acc_b,
+                               wk_sq, bk_sq, piece_idx, sq);
+            }
+        }
+
+        self.nnue_inited = true;
+    }
 }

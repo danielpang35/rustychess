@@ -25,18 +25,21 @@ pub struct Undo {
     /// Square the captured piece came from (dst for normal captures, pawn square for EP).
     /// 64 means no capture.
     pub captured_sq: u8,
+        // NEW: NNUE accumulators saved before push
+    pub nnue_acc_w: [i32; 256],
+    pub nnue_acc_b: [i32; 256],
 }
 
 impl Undo {
     #[inline(always)]
-    pub fn new(mv: Move, castling_rights: u8, ep_square: u8, hash: u64) -> Self {
+    pub fn new(mv: Move, castling_rights: u8, ep_square: u8, hash: u64,
+        nnue_acc_w: [i32;256], nnue_acc_b: [i32;256]) -> Self {
         Self {
-            mv,
-            castling_rights,
-            ep_square,
-            hash,
+            mv, castling_rights, ep_square, hash,
             captured_piece: Piece::None,
             captured_sq: 64,
+            nnue_acc_w,
+            nnue_acc_b,
         }
     }
 }

@@ -58,3 +58,9 @@ fn pst_value(table: &[i16; 64], sq: usize, color: usize) -> i32 {
         table[constlib::mirror_sq(sq)] as i32
     }
 }
+use crate::evaluate::Nnue;
+
+#[inline(always)]
+pub fn evaluate_neural(board: &Board, nnue: &Nnue) -> i32 {
+    nnue.eval_cp_like(board)
+}

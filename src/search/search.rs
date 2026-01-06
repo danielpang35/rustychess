@@ -1,6 +1,7 @@
 use crate::core::{Board, Move, movegen::MoveGenerator, PieceIndex, PieceType, Piece};
 use crate::search::alphabeta::alphabeta;
 use crate::search::tt::TranspositionTable;
+use crate::evaluate::nnue::Nnue;
 
 const MAX_PLY: usize = 128;
 
@@ -24,6 +25,9 @@ pub struct Search {
     pub tt_cut_upper: u64,
     pub tt_move_used: u64,
     pub tt: TranspositionTable,
+
+    pub nnue: Nnue,
+
 }
 
 impl Search {
@@ -33,7 +37,9 @@ impl Search {
         let history = [[0i32; 64]; 64];
         Self { nodes: 0, qnodes: 0, lmr_reductions: 0, lmr_researches: 0, pvs_researches: 0, asp_fail_low: 0, asp_fail_high: 0, killers, history,
         tt: TranspositionTable::new_mb(128),
-        tt_probes: 0, tt_hits: 0, tt_key_hits: 0, tt_cutoffs: 0, tt_exact: 0, tt_cut_lower: 0, tt_cut_upper: 0, tt_move_used: 0}
+        tt_probes: 0, tt_hits: 0, tt_key_hits: 0, tt_cutoffs: 0, tt_exact: 0, tt_cut_lower: 0, tt_cut_upper: 0, tt_move_used: 0,
+        nnue: Nnue::load("data/processed/nnue.bin").expect("failed to load NNUE file"),
+}
     }
 
     pub fn search_root_yes(&mut self, board: &mut Board, depth: u8, mg: &MoveGenerator) -> (Move,i32) {
@@ -43,10 +49,10 @@ impl Search {
         let mut best_score = -30000;
         let mut best_move = Move::new();
         for m in moves {
-            board.push(m, &mg);
+            board.push(m, &mg, &self.nnue);
             //self.debug_after_push(board, mg, m);
             let score = -alphabeta(self, board,depth - 1, mg,-30000, 30000);
-            board.pop(mg);
+            board.pop(mg, &self.nnue);
             if score > best_score {
                 best_move = m;
                 best_score = score;
@@ -57,7 +63,7 @@ impl Search {
         (best_move, best_score)
         
     }
-    pub fn search_root(&mut self, board: &mut Board, depth: u8, mg: &MoveGenerator) -> (Move,i32) {
+    pub fn search_root(&mut self, board: &mut Board, depth: u8, mg: &MoveGenerator,) -> (Move,i32) {
         
 
         return self.search_iterative(board, depth, mg);
@@ -107,7 +113,7 @@ pub fn search_iterative(
             let mut best_score = -INF;
 
             for (i, m) in moves.iter().copied().enumerate() {
-                board.push(m, mg);
+                board.push(m, mg, &self.nnue);
 
                 let score = if i == 0 {
                     // First move: full window
@@ -123,7 +129,7 @@ pub fn search_iterative(
                     s
                 };
 
-                board.pop(mg);
+                board.pop(mg, &self.nnue);
 
                 if score > best_score {
                     best_score = score;

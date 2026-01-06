@@ -7,6 +7,7 @@ use crate::core::r#move::Move;
 use crate::core::piece::PieceType;
 use crate::core::Piece;
 use crate::search;
+use crate::evaluate::nnue::Nnue;
 /// Convert UCI string (e.g., "e2e4", "e7e8q") into a Move
 pub fn uci_to_move(board: &mut Board, gen: &MoveGenerator, uci: &str) -> Option<Move> {
     let mut uci = uci.trim().to_ascii_lowercase();
@@ -48,7 +49,7 @@ pub fn uci_to_move(board: &mut Board, gen: &MoveGenerator, uci: &str) -> Option<
 }
 
 /// Interactive command line tester for the chess engine
-pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator) {
+pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator, nnue: &Nnue) {
     let mut input = String::new();
     loop {
         board.print();
@@ -67,7 +68,7 @@ pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator) {
             None => { println!("Invalid move format."); continue; }
         };
 
-        board.push(mv, generator);
+        board.push(mv, generator, nnue);
         println!("Move applied: {}{}", &uci_from_square(mv.getSrc()), &uci_from_square(mv.getDst()));
 
         // Generate legal moves
@@ -77,7 +78,7 @@ pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator) {
         }
         let mut searcher = search::Search::new();
         let bm = searcher.search_iterative(board,7, generator).0;
-        board.push(bm, generator);
+        board.push(bm, generator, nnue);
         println!("Move applied: ");
         bm.print();
         println!("Legal moves: {} total", moves.len());
@@ -87,7 +88,7 @@ pub fn interactive_cli(board: &mut Board, generator: &MoveGenerator) {
 
 
 /// Interactive command line tester for the chess engine
-pub fn interactive_cli_test(board: &mut Board, generator: &MoveGenerator) {
+pub fn interactive_cli_test(board: &mut Board, generator: &MoveGenerator, nnue: &Nnue) {
     let mut input = String::new();
     loop {
         board.print();
@@ -106,7 +107,7 @@ pub fn interactive_cli_test(board: &mut Board, generator: &MoveGenerator) {
             None => { println!("Invalid move format."); continue; }
         };
 
-        board.push(mv, generator);
+        board.push(mv, generator, nnue);
         println!("Move applied: {}{}", &uci_from_square(mv.getSrc()), &uci_from_square(mv.getDst()));
 
         // Generate legal moves

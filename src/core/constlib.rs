@@ -2,6 +2,8 @@
 pub use crate::core::movegen::MoveGenerator;
 pub use crate::core::Board;
 pub use crate::core::Move;
+use crate::evaluate::nnue::Nnue;
+
 /// Direction of going north on a chessboard.
 pub const north: i8 = 8;
 /// Direction of going south on a chessboard.
@@ -73,37 +75,19 @@ pub const notAFile:u64 = 0xfefefefefefefefe; // ~0x0101010101010101
 pub const notHFile:u64 = 0x7f7f7f7f7f7f7f7f; // ~0x8080808080808080
 
 
-pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator) -> u64 {
+pub fn perft(board: &mut Board, depth: u8, mg: &MoveGenerator, nnue: &Nnue) -> u64 {
   let mut ct = 0;
   if depth == 0 {
       return 1
   }
   let ml = mg.generate(board);
   for bm in ml {
-      board.push(bm,mg);
-      let moves = perft(board, depth - 1, mg);
+      board.push(bm,mg, nnue);
+      let moves = perft(board, depth - 1, mg, nnue);
       ct += moves;
-      board.pop(mg);
+      board.pop(mg, nnue);
   }
   ct
-}
-
-pub fn perft_tracked(board: &mut Board, depth: u8, mg: &MoveGenerator, line: &mut Vec<Move>) -> u64 {
-    if depth == 0 { return 1; }
-
-    let ml = mg.generate(board);
-    let mut ct = 0u64;
-
-    for bm in ml {
-        line.push(bm);
-        board.push(bm, mg); // will panic with correct line if illegal
-
-        ct += perft_tracked(board, depth - 1, mg, line);
-
-        board.pop(mg);
-        line.pop();
-    }
-    ct
 }
 
 pub fn get_rank(square: u8) -> u8 {
