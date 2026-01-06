@@ -751,25 +751,32 @@ pub fn debug_validate(&self) {
     }
 }
     pub fn nnue_rebuild(&mut self, nnue: &crate::evaluate::nnue::Nnue) {
-        // Copy bias into both accumulators
-        self.nnue_acc_w = nnue.b1;
-        self.nnue_acc_b = nnue.b1;
+        debug_assert_eq!(nnue.b1.len(), 256);
+
+        // Start from bias
+        self.nnue_acc_w.copy_from_slice(&nnue.b1);
+        self.nnue_acc_b.copy_from_slice(&nnue.b1);
 
         let wk_sq = self.pieces[PieceIndex::K.index()].trailing_zeros() as usize;
         let bk_sq = self.pieces[6 + PieceIndex::K.index()].trailing_zeros() as usize;
-        for i in 0..256 {
-            self.nnue_acc_w[i] = nnue.b1[i];
-            self.nnue_acc_b[i] = nnue.b1[i];
-        }
+
         for piece_idx in 0..12usize {
             let mut bb = self.pieces[piece_idx];
             while bb != 0 {
                 let sq = constlib::poplsb(&mut bb) as usize;
-                nnue_add_piece(nnue, &mut self.nnue_acc_w, &mut self.nnue_acc_b,
-                               wk_sq, bk_sq, piece_idx, sq);
+                nnue_add_piece(
+                    nnue,
+                    &mut self.nnue_acc_w,
+                    &mut self.nnue_acc_b,
+                    wk_sq,
+                    bk_sq,
+                    piece_idx,
+                    sq,
+                );
             }
         }
 
         self.nnue_inited = true;
     }
+
 }
