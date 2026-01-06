@@ -4,6 +4,16 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use std::arch::is_x86_feature_detected;
+#[cfg(target_arch = "x86")]
+use std::arch::x86::*;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::*;
+
+#[repr(align(32))]
+struct AlignedI16x512([i16; 512]);
+
 const MAGIC: &[u8; 4] = b"NNUE";
 const VERSION: u32 = 2;
 #[derive(Clone)]
@@ -44,6 +54,24 @@ impl Nnue {
             let u = nstm[i].clamp(0, clamp_hi);
             x[i] = v;
             x[256 + i] = u;
+        }
+        x
+    }
+
+    #[inline(always)]
+    fn clamp_inputs_i16(
+        &self,
+        stm: &[i32; 256],
+        nstm: &[i32; 256],
+        clamp_hi: i32,
+    ) -> AlignedI16x512 {
+        debug_assert!(clamp_hi <= i16::MAX as i32);
+        let mut x = AlignedI16x512([0i16; 512]);
+        for i in 0..256 {
+            let v = stm[i].clamp(0, clamp_hi);
+            let u = nstm[i].clamp(0, clamp_hi);
+            x.0[i] = v as i16;
+            x.0[256 + i] = u as i16;
         }
         x
     }
@@ -159,6 +187,73 @@ impl Nnue {
         self.fast_out_w.len() == 2 * self.hidden
     }
 
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2")]
+    unsafe fn dot512_avx2(x: &AlignedI16x512, w: &[i16]) -> i64 {
+        debug_assert!(w.len() >= 512);
+        let xp = x.0.as_ptr();
+        let wp = w.as_ptr();
+
+        let mut sum_vec = _mm256_setzero_si256();
+        let mut acc = 0i64;
+
+        // Process 16 i16 lanes at a time (512 / 16 = 32 blocks).
+        for block in 0..32 {
+            let xv = _mm256_loadu_si256(xp.add(block * 16) as *const __m256i);
+            let wv = _mm256_loadu_si256(wp.add(block * 16) as *const __m256i);
+            let prod = _mm256_madd_epi16(xv, wv);
+            sum_vec = _mm256_add_epi32(sum_vec, prod);
+
+            // Periodically reduce into i64 to avoid potential i32 lane overflow.
+            if block & 7 == 7 {
+                let mut tmp = [0i32; 8];
+                _mm256_storeu_si256(tmp.as_mut_ptr() as *mut __m256i, sum_vec);
+                acc += tmp.iter().map(|&v| v as i64).sum::<i64>();
+                sum_vec = _mm256_setzero_si256();
+            }
+        }
+
+        let mut tmp = [0i32; 8];
+        _mm256_storeu_si256(tmp.as_mut_ptr() as *mut __m256i, sum_vec);
+        acc += tmp.iter().map(|&v| v as i64).sum::<i64>();
+
+        acc
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2")]
+    unsafe fn fc1_layer_avx2(&self, x: &AlignedI16x512, clamp_hi: i32, out: &mut [i32; 32]) {
+        for j in 0..32 {
+            let row = &self.fc1_w[j * 512..(j + 1) * 512];
+            let mut sum: i64 = self.fc1_b[j] as i64 + Self::dot512_avx2(x, row);
+            let mut v = (sum / self.scale_fc1 as i64) as i32;
+            if v < 0 {
+                v = 0;
+            }
+            if v > clamp_hi {
+                v = clamp_hi;
+            }
+            out[j] = v;
+        }
+    }
+
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "avx2")]
+    unsafe fn eval_fast_cp_like_avx2(&self, x: &AlignedI16x512) -> i32 {
+        let mut sum: i64 = self.fast_out_b as i64 + Self::dot512_avx2(x, &self.fast_out_w);
+
+        let denom = (self.scale_emb as i64) * (self.scale_fast_out as i64);
+
+        let num = sum * 1200;
+
+        let cp = if num >= 0 {
+            (num + denom / 2) / denom
+        } else {
+            (num - denom / 2) / denom
+        };
+        cp as i32
+    }
+
     pub fn eval_fast_cp_like(&self, board: &Board) -> i32 {
         if !self.has_fast_head() {
             return self.eval_cp_like(board);
@@ -173,6 +268,13 @@ impl Nnue {
         };
 
         let clamp_hi = 127 * self.scale_emb;
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if clamp_hi <= i16::MAX as i32 && is_x86_feature_detected!("avx2") {
+            // Safety: guarded by runtime feature detection.
+            let x = self.clamp_inputs_i16(stm, nstm, clamp_hi);
+            return unsafe { self.eval_fast_cp_like_avx2(&x) };
+        }
+
         let x = self.clamp_inputs(stm, nstm, clamp_hi);
         let mut sum: i64 = self.fast_out_b as i64;
         for i in 0..512 {
@@ -200,28 +302,61 @@ impl Nnue {
         };
 
         let clamp_hi = 127 * self.scale_emb;
-        let x = self.clamp_inputs(stm, nstm, clamp_hi);
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        let mut h1 = if clamp_hi <= i16::MAX as i32 && is_x86_feature_detected!("avx2") {
+            let mut h1 = [0i32; 32];
+            let x = self.clamp_inputs_i16(stm, nstm, clamp_hi);
+            // Safety: guarded by runtime feature detection.
+            unsafe { self.fc1_layer_avx2(&x, clamp_hi, &mut h1) };
+            h1
+        } else {
+            let x = self.clamp_inputs(stm, nstm, clamp_hi);
+            let mut h1 = [0i32; 32];
 
-        // FC1 output
-        let mut h1 = [0i32; 32];
+            for j in 0..32 {
+                let mut sum: i64 = self.fc1_b[j] as i64;
+                let row = &self.fc1_w[j * 512..(j + 1) * 512];
 
-        for j in 0..32 {
-            let mut sum: i64 = self.fc1_b[j] as i64;
-            let row = &self.fc1_w[j * 512..(j + 1) * 512];
+                for i in 0..512 {
+                    sum += (x[i] as i64) * (row[i] as i64);
+                }
 
-            for i in 0..512 {
-                sum += (x[i] as i64) * (row[i] as i64);
+                let mut v = (sum / self.scale_fc1 as i64) as i32;
+                if v < 0 {
+                    v = 0;
+                }
+                if v > clamp_hi {
+                    v = clamp_hi;
+                }
+                h1[j] = v;
             }
+            h1
+        };
 
-            let mut v = (sum / self.scale_fc1 as i64) as i32;
-            if v < 0 {
-                v = 0;
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+        let mut h1 = {
+            let x = self.clamp_inputs(stm, nstm, clamp_hi);
+            let mut h1 = [0i32; 32];
+
+            for j in 0..32 {
+                let mut sum: i64 = self.fc1_b[j] as i64;
+                let row = &self.fc1_w[j * 512..(j + 1) * 512];
+
+                for i in 0..512 {
+                    sum += (x[i] as i64) * (row[i] as i64);
+                }
+
+                let mut v = (sum / self.scale_fc1 as i64) as i32;
+                if v < 0 {
+                    v = 0;
+                }
+                if v > clamp_hi {
+                    v = clamp_hi;
+                }
+                h1[j] = v;
             }
-            if v > clamp_hi {
-                v = clamp_hi;
-            }
-            h1[j] = v;
-        }
+            h1
+        };
 
         // FC2
         let mut h2 = [0i32; 32];
