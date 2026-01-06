@@ -1,4 +1,5 @@
 use crate::core::{Board, Move, movegen::MoveGenerator, PieceIndex, PieceType, Piece};
+use crate::perf;
 use crate::evaluate::{evaluate, evaluate_neural};
 use crate::search::alphabeta::alphabeta;
 use crate::search::tt::TranspositionTable;
@@ -90,6 +91,8 @@ pub fn search_iterative(
 ) -> (Move, i32) {
     const INF: i32 = 30_000;
 
+    perf::reset();
+
     let mut pv: Option<Move> = None;
     let mut prev_score: i32 = 0;
 
@@ -180,7 +183,7 @@ pub fn search_iterative(
 
         final_best = best_move;
         final_score = best_score;
-        println!("Searched to depth {}: PV: ", depth);  
+        println!("Searched to depth {}: PV: ", depth);
         final_best.print();
     }
         println!(
@@ -200,6 +203,9 @@ pub fn search_iterative(
     self.tt_cut_upper,
     self.tt_move_used,
 );
+
+    let snapshot = perf::snapshot();
+    perf::print_snapshot("Performance metrics", snapshot);
     (final_best, final_score)
 }
 

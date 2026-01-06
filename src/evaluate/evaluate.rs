@@ -1,6 +1,8 @@
-use crate::core::{Board, PieceIndex, constlib, movegen::MoveGenerator};
+use crate::core::{constlib, movegen::MoveGenerator, Board, PieceIndex};
 use crate::evaluate::evaluate::constlib::KNIGHT_PST;
 use crate::evaluate::evaluate::constlib::PAWN_PST;
+use crate::perf;
+use std::time::Instant;
 pub fn evaluate(board: &Board, mg: &MoveGenerator) -> i32 {
     let mut score: i32 = 0;
 
@@ -62,5 +64,8 @@ use crate::evaluate::Nnue;
 
 #[inline(always)]
 pub fn evaluate_neural(board: &Board, nnue: &Nnue) -> i32 {
-    nnue.eval_cp_like(board)
+    let start = Instant::now();
+    let score = nnue.eval_cp_like(board);
+    perf::record_eval_neural(start.elapsed());
+    score
 }

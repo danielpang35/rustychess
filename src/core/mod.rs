@@ -20,6 +20,9 @@ pub use state::Undo;
 pub use crate::evaluate::nnue::Nnue;
 use crate::evaluate::nnue::{nnue_add_piece,nnue_sub_piece};
 use crate::core::zobrist::{Z_PIECE_SQ, Z_SIDE, Z_CASTLING, Z_EP_FILE};
+use crate::perf;
+use std::time::Instant;
+
 use crate::evaluate::nnue::nnue_move_piece;
 // a struct defining the physical aspects of the board
 pub struct Board {
@@ -105,6 +108,7 @@ impl Board {
     }
 
     pub fn push(&mut self, bm: Move, movegen: &movegen::MoveGenerator, nnue: &Nnue) {
+        let push_timer = Instant::now();
         let color = self.turn;
         let enemy = color ^ 1;
 
@@ -263,6 +267,7 @@ impl Board {
 
 
         // ---- NNUE INCREMENTAL ACC update ----
+        let nnue_timer = Instant::now();
         // Assumes self.nnue_acc_w / self.nnue_acc_b currently represent the PRE-move position
         // (we ensured initialization + created Undo snapshot before making changes).
 
@@ -339,6 +344,8 @@ impl Board {
                 }
             }
         }
+        perf::record_push_nn_update(nnue_timer.elapsed());
+
         #[cfg(debug_assertions)]
         {
             let recomputed = Self::compute_hash(self); // rebuild from pieces + side + rights + ep
@@ -376,9 +383,12 @@ self.debug_validate();
             }
         }
 
+        perf::record_push(push_timer.elapsed());
+
     }
 
     pub fn pop(&mut self, movegen: &movegen::MoveGenerator, nnue: &Nnue) {
+        let pop_timer = Instant::now();
         let undo = match self.history.pop() {
             Some(u) => u,
             None => {
@@ -490,6 +500,8 @@ self.debug_validate();
             debug_assert_eq!(self.hash, Self::compute_hash(self));
             self.assert_kings_present();
         }
+
+        perf::record_pop(pop_timer.elapsed());
 
     }
 
