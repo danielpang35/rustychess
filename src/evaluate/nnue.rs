@@ -36,6 +36,18 @@ pub struct Nnue {
 }
 
 impl Nnue {
+    #[inline(always)]
+    fn clamp_inputs(&self, stm: &[i32; 256], nstm: &[i32; 256], clamp_hi: i32) -> [i32; 512] {
+        let mut x = [0i32; 512];
+        for i in 0..256 {
+            let v = stm[i].clamp(0, clamp_hi);
+            let u = nstm[i].clamp(0, clamp_hi);
+            x[i] = v;
+            x[256 + i] = u;
+        }
+        x
+    }
+
     pub fn load<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let mut buf = Vec::new();
         File::open(path)?.read_to_end(&mut buf)?;
@@ -161,26 +173,10 @@ impl Nnue {
         };
 
         let clamp_hi = 127 * self.scale_emb;
+        let x = self.clamp_inputs(stm, nstm, clamp_hi);
         let mut sum: i64 = self.fast_out_b as i64;
-        for i in 0..self.hidden {
-            let mut x = stm[i];
-            if x < 0 {
-                x = 0;
-            }
-            if x > clamp_hi {
-                x = clamp_hi;
-            }
-            sum += (x as i64) * (self.fast_out_w[i] as i64);
-        }
-        for i in 0..self.hidden {
-            let mut x = nstm[i];
-            if x < 0 {
-                x = 0;
-            }
-            if x > clamp_hi {
-                x = clamp_hi;
-            }
-            sum += (x as i64) * (self.fast_out_w[self.hidden + i] as i64);
+        for i in 0..512 {
+            sum += (x[i] as i64) * (self.fast_out_w[i] as i64);
         }
 
         let denom = (self.scale_emb as i64) * (self.scale_fast_out as i64);
@@ -204,6 +200,7 @@ impl Nnue {
         };
 
         let clamp_hi = 127 * self.scale_emb;
+        let x = self.clamp_inputs(stm, nstm, clamp_hi);
 
         // FC1 output
         let mut h1 = [0i32; 32];
@@ -212,25 +209,8 @@ impl Nnue {
             let mut sum: i64 = self.fc1_b[j] as i64;
             let row = &self.fc1_w[j * 512..(j + 1) * 512];
 
-            for i in 0..256 {
-                let mut x = stm[i];
-                if x < 0 {
-                    x = 0;
-                }
-                if x > clamp_hi {
-                    x = clamp_hi;
-                }
-                sum += (x as i64) * (row[i] as i64);
-            }
-            for i in 0..256 {
-                let mut x = nstm[i];
-                if x < 0 {
-                    x = 0;
-                }
-                if x > clamp_hi {
-                    x = clamp_hi;
-                }
-                sum += (x as i64) * (row[256 + i] as i64);
+            for i in 0..512 {
+                sum += (x[i] as i64) * (row[i] as i64);
             }
 
             let mut v = (sum / self.scale_fc1 as i64) as i32;
