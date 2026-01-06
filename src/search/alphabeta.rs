@@ -1,5 +1,4 @@
 use crate::core::{Board, Move, movegen::MoveGenerator, PieceIndex, constlib};
-use crate::evaluate::{evaluate,evaluate_neural};
 use crate::search::Search;
 use crate::search::tt::{TT_EMPTY, TT_EXACT, TT_LOWER, TT_UPPER};
 
@@ -172,14 +171,14 @@ fn qsearch(
     const QPLY_MAX: u8 = 8;
     if qply >= QPLY_MAX {
         // return evaluate(board, generator);
-        return evaluate_neural(board, &search.nnue);
+        return search.eval(board, generator);
     }
 
     // If we're in check, we must search evasions; stand-pat is illegal.
     let in_check = generator.in_check(board);
     let mut stand_pat_opt: Option<i32> = None;
     if !in_check {
-        let stand_pat = evaluate_neural(board, &search.nnue);
+        let stand_pat = search.eval(board, generator);
         stand_pat_opt = Some(stand_pat);
 
         // If we are so far below alpha that even winning a queen can't help, prune.
