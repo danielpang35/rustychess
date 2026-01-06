@@ -1,14 +1,18 @@
-use crate::core::{Board, Move, movegen::MoveGenerator, PieceIndex, constlib};
-use crate::search::Search;
+use crate::core::{constlib, movegen::MoveGenerator, Board, Move, PieceIndex};
 use crate::search::tt::{TT_EMPTY, TT_EXACT, TT_LOWER, TT_UPPER};
+use crate::search::Search;
 
+const Mate: i32 = 99999;
 
-const Mate: i32
-    = 99999;
-
-const MATE_WINDOW: i32
-    = 90000; // centipawns
-pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &MoveGenerator, mut alpha: i32, beta: i32) -> i32 {
+const MATE_WINDOW: i32 = 90000; // centipawns
+pub fn alphabeta(
+    search: &mut Search,
+    board: &mut Board,
+    depth: u8,
+    generator: &MoveGenerator,
+    mut alpha: i32,
+    beta: i32,
+) -> i32 {
     //update search
     search.nodes += 1;
     let key = board.hash;
@@ -22,19 +26,24 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
         search.tt_hits += 1;
         let tt_score = score_from_tt(entry.score, ply);
         match entry.flag {
-            TT_EXACT => {   
-                            search.tt_exact += 1;
-                            return tt_score},
+            TT_EXACT => {
+                search.tt_exact += 1;
+                return tt_score;
+            }
             TT_LOWER => {
-                if tt_score >= beta {                     
-                            search.tt_cut_lower += 1;
-                            return tt_score; }
-                if tt_score > alpha { alpha = tt_score; }
+                if tt_score >= beta {
+                    search.tt_cut_lower += 1;
+                    return tt_score;
+                }
+                if tt_score > alpha {
+                    alpha = tt_score;
+                }
             }
             TT_UPPER => {
-                if tt_score <= alpha {                     
-                            search.tt_cut_upper += 1;
-                            return tt_score; }
+                if tt_score <= alpha {
+                    search.tt_cut_upper += 1;
+                    return tt_score;
+                }
             }
             _ => {}
         }
@@ -45,8 +54,8 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
     }
     if depth == 0 {
         return qsearch(search, board, generator, alpha, beta, 0);
-    }   
-    
+    }
+
     let mut moves = generator.generate(board);
     let in_check = generator.in_check(board);
 
@@ -58,14 +67,18 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
             return 0; // stalemate
         }
     }
-    
+
     let node_ply = board.ply as usize;
     let mut depth = depth;
     if in_check && depth < 15 {
         depth += 1; // check extension
     }
     //get the transposition table move regardless of depth and put it first.
-    let tt_move = if entry.flag != TT_EMPTY { entry.best } else { 0 };
+    let tt_move = if entry.flag != TT_EMPTY {
+        entry.best
+    } else {
+        0
+    };
     if tt_move != 0 {
         Search::pv_first(&mut moves, &Move::from_u16(tt_move));
     }
@@ -80,25 +93,31 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
     search.order_moves_range(&mut moves, board, node_ply);
     for (i, m) in moves.iter().copied().enumerate() {
         let enemy = if board.turn == 0 { 1 } else { 0 };
-        let enemy_king_idx = if enemy == 0 { PieceIndex::K.index() } else { PieceIndex::k.index() };
+        let enemy_king_idx = if enemy == 0 {
+            PieceIndex::K.index()
+        } else {
+            PieceIndex::k.index()
+        };
         let mut kingbb = board.pieces[enemy_king_idx];
         let enemy_king_sq = constlib::poplsb(&mut kingbb);
 
         if m.getDst() == enemy_king_sq as u8 {
-            eprintln!("ABOUT TO PUSH KING-CAPTURE MOVE: from={} to={}", m.getSrc(), m.getDst());
+            eprintln!(
+                "ABOUT TO PUSH KING-CAPTURE MOVE: from={} to={}",
+                m.getSrc(),
+                m.getDst()
+            );
             // board.print();
         }
         board.push(m, &generator, &search.nnue);
         search.debug_after_push(board, generator, m);
 
         let mut score: i32;
-        
 
         // --- LMR: late quiet moves searched at reduced depth first ---
 
-                // --- LMR: late quiet moves searched at reduced depth first ---
+        // --- LMR: late quiet moves searched at reduced depth first ---
         if depth >= 4 && !in_check && m.isquiet() && i >= 4 {
-
             // Robust "gives check" (see Patch 3): compute attacks by the mover.
             // After push(), board.turn is the side-to-move (the opponent).
             // let kingidx = if board.turn == 0 { PieceIndex::K.index() } else { PieceIndex::k.index() };
@@ -123,20 +142,14 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
             score = -alphabeta(search, board, depth - 1, generator, -beta, -alpha);
         }
 
-
-
         board.pop(generator, &search.nnue);
 
         if score >= beta {
             search.store_killer(node_ply, m);
             search.store_history_cutoff(m, depth);
-            search.tt.store(
-                key,
-                depth,
-                TT_LOWER,
-                score_to_tt(beta, ply),
-                m.as_u16(),
-            );
+            search
+                .tt
+                .store(key, depth, TT_LOWER, score_to_tt(beta, ply), m.as_u16());
             return beta;
         }
         if score > alpha {
@@ -146,16 +159,15 @@ pub fn alphabeta(search: &mut Search, board: &mut Board, depth: u8, generator: &
     }
 
     let flag = if alpha <= alpha0 { TT_UPPER } else { TT_EXACT };
-        search.tt.store(
-            key,
-            depth,
-            flag,
-            score_to_tt(alpha, ply),
-            best_move.as_u16(),
-        );
+    search.tt.store(
+        key,
+        depth,
+        flag,
+        score_to_tt(alpha, ply),
+        best_move.as_u16(),
+    );
 
     alpha
-
 }
 
 #[inline(always)]
@@ -171,14 +183,14 @@ fn qsearch(
     const QPLY_MAX: u8 = 8;
     if qply >= QPLY_MAX {
         // return evaluate(board, generator);
-        return search.eval(board, generator);
+        return search.eval_fast(board, generator);
     }
 
     // If we're in check, we must search evasions; stand-pat is illegal.
     let in_check = generator.in_check(board);
     let mut stand_pat_opt: Option<i32> = None;
     if !in_check {
-        let stand_pat = search.eval(board, generator);
+        let stand_pat = search.eval_fast(board, generator);
         stand_pat_opt = Some(stand_pat);
 
         // If we are so far below alpha that even winning a queen can't help, prune.
@@ -198,7 +210,7 @@ fn qsearch(
     // - if not in check: captures only (plus optionally promotions)
     // - if in check: all legal moves (evasions)
     let mut moves = if in_check {
-        generator.generate(board)          // evasions
+        generator.generate(board) // evasions
     } else {
         generator.generate_qcaptures(board) // tactical only
     };
@@ -212,8 +224,10 @@ fn qsearch(
     }
     #[cfg(debug_assertions)]
     if !in_check {
-        debug_assert!(moves.iter().all(|m| m.iscapture() || m.isprom()),
-            "generate_qcaptures produced a non-tactical move");
+        debug_assert!(
+            moves.iter().all(|m| m.iscapture() || m.isprom()),
+            "generate_qcaptures produced a non-tactical move"
+        );
     }
     // Order tacticals for qsearch (reuse your existing ordering logic)
     // NOTE: ply is still board.ply at this node.
@@ -244,9 +258,8 @@ fn qsearch(
                 continue;
             }
         }
-        
-        if let Some(_stand_pat) = stand_pat_opt {
 
+        if let Some(_stand_pat) = stand_pat_opt {
             if !in_check && qply >= 1 && m.iscapture() && !m.isprom() {
                 let mover = board.piecelocs.piece_at(m.getSrc());
                 let mover_val = piece_cp(mover.get_piece_type());
@@ -268,7 +281,6 @@ fn qsearch(
                     let them = us ^ 1;
                     let dst = m.getDst();
 
-
                     let src_bb = 1u64 << (m.getSrc() as u64);
                     let dst_bb = 1u64 << (dst as u64);
 
@@ -284,7 +296,11 @@ fn qsearch(
                         // You must compute the actual captured pawn square.
                         // Typical: if us==0 (white capturing), captured pawn is dst-8; else dst+8.
                         let us = board.turn;
-                        let cap_sq = if us == 0 { m.getDst() - 8 } else { m.getDst() + 8 };
+                        let cap_sq = if us == 0 {
+                            m.getDst() - 8
+                        } else {
+                            m.getDst() + 8
+                        };
                         occ_after &= !(1u64 << (cap_sq as u64));
                     }
                     // Targeted: is dst defended by the enemy, given current occ?
@@ -312,8 +328,6 @@ fn qsearch(
     alpha
 }
 
-
-
 #[inline(always)]
 fn score_to_tt(score: i32, ply: u16) -> i32 {
     if score > MATE_WINDOW {
@@ -336,17 +350,17 @@ fn score_from_tt(score: i32, ply: u16) -> i32 {
     }
 }
 
-    #[inline(always)]
-    fn piece_cp(pt: crate::core::piece::PieceType) -> i32 {
-        use crate::core::piece::PieceType::*;
-        match pt {
-            P => 100,
-            N => 320,
-            B => 330,
-            R => 500,
-            Q => 900,
-            _ => 0,
-        }
+#[inline(always)]
+fn piece_cp(pt: crate::core::piece::PieceType) -> i32 {
+    use crate::core::piece::PieceType::*;
+    match pt {
+        P => 100,
+        N => 320,
+        B => 330,
+        R => 500,
+        Q => 900,
+        _ => 0,
     }
-    const DELTA_MARGIN: i32 = 50;
-    const BAD_CAP_MARGIN: i32 = 120; // ~one pawn + change
+}
+const DELTA_MARGIN: i32 = 50;
+const BAD_CAP_MARGIN: i32 = 120; // ~one pawn + change
