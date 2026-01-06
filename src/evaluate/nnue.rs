@@ -1,8 +1,8 @@
-use std::fs::File;
-use std::io::{Read};
-use std::path::Path;
+use crate::core::{Board, PieceIndex};
 use std::convert::TryInto;
-use crate::core::{Board, PieceIndex, Piece, constlib};
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 
 const MAGIC: &[u8; 4] = b"NNUE";
 const VERSION: u32 = 2;
@@ -17,18 +17,22 @@ pub struct Nnue {
     pub scale_fc1: i32,
     pub scale_fc2: i32,
     pub scale_out: i32,
+    pub scale_fast_out: i32,
 
-    pub emb: Vec<i16>,    // [num_feat * hidden]
-    pub b1: Vec<i32>,     // [hidden]
+    pub emb: Vec<i16>, // [num_feat * hidden]
+    pub b1: Vec<i32>,  // [hidden]
 
-    pub fc1_w: Vec<i16>,  // [h1 * (2*hidden)]
-    pub fc1_b: Vec<i32>,  // [h1]
+    pub fc1_w: Vec<i16>, // [h1 * (2*hidden)]
+    pub fc1_b: Vec<i32>, // [h1]
 
-    pub fc2_w: Vec<i16>,  // [h2 * h1]
-    pub fc2_b: Vec<i32>,  // [h2]
+    pub fc2_w: Vec<i16>, // [h2 * h1]
+    pub fc2_b: Vec<i32>, // [h2]
 
-    pub out_w: Vec<i16>,  // [h2]
+    pub out_w: Vec<i16>, // [h2]
     pub out_b: i32,
+
+    pub fast_out_w: Vec<i16>, // [2 * hidden]
+    pub fast_out_b: i32,
 }
 
 impl Nnue {
@@ -38,29 +42,40 @@ impl Nnue {
 
         let mut off = 0usize;
 
-        let magic = &buf[off..off + 4]; off += 4;
+        let magic = &buf[off..off + 4];
+        off += 4;
         if magic != MAGIC {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "bad NNUE magic"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "bad NNUE magic",
+            ));
         }
 
         let ver = read_u32(&buf, &mut off);
         if ver != VERSION {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "bad NNUE version"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "bad NNUE version",
+            ));
         }
 
         let num_feat = read_u32(&buf, &mut off) as usize;
-        let hidden   = read_u32(&buf, &mut off) as usize;
-        let h1       = read_u32(&buf, &mut off) as usize;
-        let h2       = read_u32(&buf, &mut off) as usize;
+        let hidden = read_u32(&buf, &mut off) as usize;
+        let h1 = read_u32(&buf, &mut off) as usize;
+        let h2 = read_u32(&buf, &mut off) as usize;
 
         if hidden != 256 || h1 != 32 || h2 != 32 {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "unexpected NNUE dimensions"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "unexpected NNUE dimensions",
+            ));
         }
 
         let scale_emb = read_i32(&buf, &mut off);
         let scale_fc1 = read_i32(&buf, &mut off);
         let scale_fc2 = read_i32(&buf, &mut off);
         let scale_out = read_i32(&buf, &mut off);
+        let mut scale_fast_out = scale_out;
 
         let mut emb = vec![0i16; num_feat * hidden];
         read_i16_slice(&buf, &mut off, &mut emb);
@@ -85,18 +100,99 @@ impl Nnue {
 
         let out_b = read_i32(&buf, &mut off);
 
+        let mut fast_out_w = Vec::new();
+        let mut fast_out_b = 0;
+
+        let needed_fast = 4 + (2 * 2 * hidden) + 4; // scale + weights + bias
+        if buf.len() >= off + needed_fast {
+            scale_fast_out = read_i32(&buf, &mut off);
+
+            fast_out_w = vec![0i16; 2 * hidden];
+            read_i16_slice(&buf, &mut off, &mut fast_out_w);
+
+            fast_out_b = read_i32(&buf, &mut off);
+        }
+
         Ok(Self {
-            num_feat, hidden, h1, h2,
-            scale_emb, scale_fc1, scale_fc2, scale_out,
-            emb, b1, fc1_w, fc1_b, fc2_w, fc2_b, out_w, out_b,
+            num_feat,
+            hidden,
+            h1,
+            h2,
+            scale_emb,
+            scale_fc1,
+            scale_fc2,
+            scale_out,
+            scale_fast_out,
+            emb,
+            b1,
+            fc1_w,
+            fc1_b,
+            fc2_w,
+            fc2_b,
+            out_w,
+            out_b,
+            fast_out_w,
+            fast_out_b,
         })
     }
-
 
     #[inline(always)]
     fn emb_row(&self, feat: usize) -> &[i16] {
         let start = feat * self.hidden;
         &self.emb[start..start + self.hidden]
+    }
+
+    #[inline(always)]
+    fn has_fast_head(&self) -> bool {
+        self.fast_out_w.len() == 2 * self.hidden
+    }
+
+    pub fn eval_fast_cp_like(&self, board: &Board) -> i32 {
+        if !self.has_fast_head() {
+            return self.eval_cp_like(board);
+        }
+
+        debug_assert!(board.nnue_inited);
+
+        let (stm, nstm) = if board.turn == 0 {
+            (&board.nnue_acc_w, &board.nnue_acc_b)
+        } else {
+            (&board.nnue_acc_b, &board.nnue_acc_w)
+        };
+
+        let clamp_hi = 127 * self.scale_emb;
+        let mut sum: i64 = self.fast_out_b as i64;
+        for i in 0..self.hidden {
+            let mut x = stm[i];
+            if x < 0 {
+                x = 0;
+            }
+            if x > clamp_hi {
+                x = clamp_hi;
+            }
+            sum += (x as i64) * (self.fast_out_w[i] as i64);
+        }
+        for i in 0..self.hidden {
+            let mut x = nstm[i];
+            if x < 0 {
+                x = 0;
+            }
+            if x > clamp_hi {
+                x = clamp_hi;
+            }
+            sum += (x as i64) * (self.fast_out_w[self.hidden + i] as i64);
+        }
+
+        let denom = (self.scale_emb as i64) * (self.scale_fast_out as i64);
+
+        let num = sum * 1200;
+
+        let cp = if num >= 0 {
+            (num + denom / 2) / denom
+        } else {
+            (num - denom / 2) / denom
+        };
+        cp as i32
     }
     pub fn eval_cp_like(&self, board: &Board) -> i32 {
         debug_assert!(board.nnue_inited);
@@ -118,20 +214,32 @@ impl Nnue {
 
             for i in 0..256 {
                 let mut x = stm[i];
-                if x < 0 { x = 0; }
-                if x > clamp_hi { x = clamp_hi; }
+                if x < 0 {
+                    x = 0;
+                }
+                if x > clamp_hi {
+                    x = clamp_hi;
+                }
                 sum += (x as i64) * (row[i] as i64);
             }
             for i in 0..256 {
                 let mut x = nstm[i];
-                if x < 0 { x = 0; }
-                if x > clamp_hi { x = clamp_hi; }
+                if x < 0 {
+                    x = 0;
+                }
+                if x > clamp_hi {
+                    x = clamp_hi;
+                }
                 sum += (x as i64) * (row[256 + i] as i64);
             }
 
             let mut v = (sum / self.scale_fc1 as i64) as i32;
-            if v < 0 { v = 0; }
-            if v > clamp_hi { v = clamp_hi; }
+            if v < 0 {
+                v = 0;
+            }
+            if v > clamp_hi {
+                v = clamp_hi;
+            }
             h1[j] = v;
         }
 
@@ -147,8 +255,12 @@ impl Nnue {
             }
 
             let mut v = (sum / self.scale_fc2 as i64) as i32;
-            if v < 0 { v = 0; }
-            if v > clamp_hi { v = clamp_hi; }
+            if v < 0 {
+                v = 0;
+            }
+            if v > clamp_hi {
+                v = clamp_hi;
+            }
             h2[j] = v;
         }
 
@@ -173,7 +285,6 @@ impl Nnue {
         };
         cp as i32
     }
-
 }
 
 #[inline(always)]
@@ -213,7 +324,7 @@ fn feat_index(king_sq: usize, piece_idx: usize, piece_sq: usize) -> usize {
 }
 
 #[inline(always)]
-fn apply_delta(acc: &mut [i32;256], row: &[i16], sign: i32) {
+fn apply_delta(acc: &mut [i32; 256], row: &[i16], sign: i32) {
     // sign is +1 (add) or -1 (remove)
     for i in 0..256 {
         acc[i] += sign * (row[i] as i32);
@@ -234,8 +345,15 @@ pub fn sub_row(acc: &mut [i32; 256], row: &[i16]) {
 }
 
 #[inline(always)]
-pub fn nnue_add_piece(nnue: &Nnue, acc_w: &mut [i32;256], acc_b: &mut [i32;256],
-                  wk_sq: usize, bk_sq: usize, piece_idx: usize, sq: usize) {
+pub fn nnue_add_piece(
+    nnue: &Nnue,
+    acc_w: &mut [i32; 256],
+    acc_b: &mut [i32; 256],
+    wk_sq: usize,
+    bk_sq: usize,
+    piece_idx: usize,
+    sq: usize,
+) {
     let fw = feat_index(wk_sq, piece_idx, sq);
     let fb = feat_index(bk_sq, piece_idx, sq);
     add_row(acc_w, nnue.emb_row(fw));
@@ -243,16 +361,22 @@ pub fn nnue_add_piece(nnue: &Nnue, acc_w: &mut [i32;256], acc_b: &mut [i32;256],
 }
 
 #[inline(always)]
-pub fn nnue_sub_piece(nnue: &Nnue, acc_w: &mut [i32;256], acc_b: &mut [i32;256],
-                  wk_sq: usize, bk_sq: usize, piece_idx: usize, sq: usize) {
+pub fn nnue_sub_piece(
+    nnue: &Nnue,
+    acc_w: &mut [i32; 256],
+    acc_b: &mut [i32; 256],
+    wk_sq: usize,
+    bk_sq: usize,
+    piece_idx: usize,
+    sq: usize,
+) {
     let fw = feat_index(wk_sq, piece_idx, sq);
     let fb = feat_index(bk_sq, piece_idx, sq);
     sub_row(acc_w, nnue.emb_row(fw));
     sub_row(acc_b, nnue.emb_row(fb));
 }
 #[inline(always)]
-fn update_piece_move(nnue: &Nnue, board: &mut Board,
-                     piece_idx: usize, from: usize, to: usize) {
+fn update_piece_move(nnue: &Nnue, board: &mut Board, piece_idx: usize, from: usize, to: usize) {
     let wk_sq = board.pieces[PieceIndex::K.index()].trailing_zeros() as usize;
     let bk_sq = board.pieces[6 + PieceIndex::K.index()].trailing_zeros() as usize;
 
@@ -272,8 +396,8 @@ fn update_piece_move(nnue: &Nnue, board: &mut Board,
 #[inline(always)]
 pub fn nnue_move_piece(
     nnue: &Nnue,
-    acc_w: &mut [i32;256],
-    acc_b: &mut [i32;256],
+    acc_w: &mut [i32; 256],
+    acc_b: &mut [i32; 256],
     wk_sq: usize,
     bk_sq: usize,
     piece_idx: usize,
@@ -281,14 +405,14 @@ pub fn nnue_move_piece(
     to: usize,
 ) {
     let fw_from = feat_index(wk_sq, piece_idx, from);
-    let fw_to   = feat_index(wk_sq, piece_idx, to);
+    let fw_to = feat_index(wk_sq, piece_idx, to);
     let fb_from = feat_index(bk_sq, piece_idx, from);
-    let fb_to   = feat_index(bk_sq, piece_idx, to);
+    let fb_to = feat_index(bk_sq, piece_idx, to);
 
     let w_from = nnue.emb_row(fw_from);
-    let w_to   = nnue.emb_row(fw_to);
+    let w_to = nnue.emb_row(fw_to);
     let b_from = nnue.emb_row(fb_from);
-    let b_to   = nnue.emb_row(fb_to);
+    let b_to = nnue.emb_row(fb_to);
 
     for i in 0..256 {
         acc_w[i] += (w_to[i] as i32) - (w_from[i] as i32);
