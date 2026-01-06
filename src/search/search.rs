@@ -224,12 +224,11 @@ impl Search {
             self.asp_fail_high
         );
         println!(
-    "TT: probes={} hits={}  ({:.1}%) key_hits={} tt_cutoff={} exact={} cutL={} cutU={} move_used={} ",
+    "TT: probes={} hits={}  ({:.1}%) key_hits={}  exact={} cutL={} cutU={} move_used={} ",
     self.tt_probes,
     self.tt_hits,
     (self.tt_hits as f64 * 100.0) / self.tt_probes.max(1) as f64,
     self.tt_key_hits,
-    self.tt_cutoffs,
     self.tt_exact,
     self.tt_cut_lower,
     self.tt_cut_upper,
