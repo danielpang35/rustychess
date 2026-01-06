@@ -1,5 +1,6 @@
 use crate::core::{Board, Move, movegen::MoveGenerator, PieceIndex, PieceType, Piece};
 use crate::perf;
+use crate::evaluate::{evaluate, evaluate_neural};
 use crate::search::alphabeta::alphabeta;
 use crate::search::tt::TranspositionTable;
 use crate::evaluate::nnue::Nnue;
@@ -27,20 +28,31 @@ pub struct Search {
     pub tt_move_used: u64,
     pub tt: TranspositionTable,
 
+    pub use_nnue: bool,
     pub nnue: Nnue,
 
 }
 
 impl Search {
-    pub fn new() -> Self {
+    pub fn new(use_nnue: bool) -> Self {
         let null = Move::new();
         let killers = std::array::from_fn(|_| [null; 2]);
         let history = [[0i32; 64]; 64];
         Self { nodes: 0, qnodes: 0, lmr_reductions: 0, lmr_researches: 0, pvs_researches: 0, asp_fail_low: 0, asp_fail_high: 0, killers, history,
         tt: TranspositionTable::new_mb(128),
         tt_probes: 0, tt_hits: 0, tt_key_hits: 0, tt_cutoffs: 0, tt_exact: 0, tt_cut_lower: 0, tt_cut_upper: 0, tt_move_used: 0,
+        use_nnue,
         nnue: Nnue::load("data/processed/nnue.bin").expect("failed to load NNUE file"),
 }
+    }
+
+    #[inline(always)]
+    pub fn eval(&self, board: &Board, mg: &MoveGenerator) -> i32 {
+        if self.use_nnue {
+            evaluate_neural(board, &self.nnue)
+        } else {
+            evaluate(board, mg)
+        }
     }
 
     pub fn search_root_yes(&mut self, board: &mut Board, depth: u8, mg: &MoveGenerator) -> (Move,i32) {

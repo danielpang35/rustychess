@@ -23,6 +23,7 @@ use crate::core::zobrist::{Z_PIECE_SQ, Z_SIDE, Z_CASTLING, Z_EP_FILE};
 use crate::perf;
 use std::time::Instant;
 
+use crate::evaluate::nnue::nnue_move_piece;
 // a struct defining the physical aspects of the board
 pub struct Board {
     pub occupied: u64,
@@ -317,7 +318,7 @@ impl Board {
                 );
             } else {
                 // Normal move: mover from->to
-                nnue_sub_piece(
+                nnue_move_piece(
                     nnue,
                     &mut self.nnue_acc_w,
                     &mut self.nnue_acc_b,
@@ -325,16 +326,9 @@ impl Board {
                     bk_sq,
                     mover_idx,
                     from as usize,
+                    to as usize
                 );
-                nnue_add_piece(
-                    nnue,
-                    &mut self.nnue_acc_w,
-                    &mut self.nnue_acc_b,
-                    wk_sq,
-                    bk_sq,
-                    mover_idx,
-                    to as usize,
-                );
+
 
                 // Capture (including EP): remove captured at captured_sq
                 if undo.captured_piece != Piece::None {
@@ -352,6 +346,7 @@ impl Board {
         }
         perf::record_push_nn_update(nnue_timer.elapsed());
 
+        #[cfg(debug_assertions)]
         {
             let recomputed = Self::compute_hash(self); // rebuild from pieces + side + rights + ep
             assert_eq!(self.hash, recomputed, "Zobrist mismatch after push/pop");
