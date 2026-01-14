@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "lil-gui": "^0.20.0",
-    "live-server": "^1.2.0"
-  }
-}
